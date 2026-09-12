@@ -1,0 +1,13 @@
+### Health check
+GET http://127.0.0.1:8000/api/health
+
+### Top corridors
+GET http://127.0.0.1:8000/api/corridors
+
+### Get a price quote (needs the "REST Client" VS Code extension -- click "Send Request" above each block)
+POST http://127.0.0.1:8000/api/quote
+Content-Type: application/json
+
+{
+  "text": "From: Begur, mysuru\n\nTo: Udumulpettai\n\nDate: 11/09/2026 Friday\n\nVehicle Type: 12 wheel\n\nMaterial: feed\n\nWeight: 25ton\n\nloading &unloading:,"
+}

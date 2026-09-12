@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+
+# runtime-grown caches (seed files ARE committed; these are what the server
+# writes to at runtime and can just regrow from the seed on next deploy)
+data/geocode_cache.json
+data/distance_cache.json
+
+# user-submitted quote feedback (accurate/comment) -- accumulates locally,
+# reviewed and folded into manual_quotes.json / training data by hand
+data/feedback.json
