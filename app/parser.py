@@ -41,11 +41,14 @@ FIELD_PATTERNS = {
     "loading_unloading": re.compile(r'\bLoading\s*(?:&|and)?\s*Unloading\s*[:\-]\s*(.*)', re.IGNORECASE),
 }
 
-WEIGHT_RE = re.compile(r'([\d.]+)\s*(ton|tonne|tonnes|tons|t\b|kg)', re.IGNORECASE)
-WEIGHT_ONLY_RE = re.compile(r'^[\d.]+\s*(ton|tonne|tonnes|tons|t|kg)s?\.?$', re.IGNORECASE)
+_WEIGHT_NUM = r'-?[\d,]+(?:\.\d+)?'
+_WEIGHT_UNIT = r'(tonnes|tonne|tons|ton|mts|mt|tn|kgs|kg|t)\b'
+WEIGHT_RE = re.compile(r'(' + _WEIGHT_NUM + r')\s*' + _WEIGHT_UNIT, re.IGNORECASE)
+WEIGHT_ONLY_RE = re.compile(r'^' + _WEIGHT_NUM + r'\s*' + _WEIGHT_UNIT + r'\.?$', re.IGNORECASE)
 WEIGHT_SUFFIX_RE = re.compile(
-    r'^(.*?)[\s,]+[\d.]+\s*(ton|tonne|tonnes|tons|t|kg)s?\.?\s*$', re.IGNORECASE
+    r'^(.*?)[\s,]+' + _WEIGHT_NUM + r'\s*' + _WEIGHT_UNIT + r'\.?\s*$', re.IGNORECASE
 )
+BARE_NUMBER_RE = re.compile(r'^(' + _WEIGHT_NUM + r')$')
 ROUTE_TO_RE = re.compile(r'^(.*?)\s+to\s+(.*)$', re.IGNORECASE)
 ROUTE_DELIM_RE = re.compile(r'\s*(?:->|–|—|-|,|/)\s*')
 
@@ -88,9 +91,34 @@ def _extract_weight_tons(text):
     wm = WEIGHT_RE.search(text)
     if not wm:
         return None
-    val = float(wm.group(1))
+    val = float(wm.group(1).replace(',', ''))
+    if val <= 0:
+        # a negative or zero weight isn't a real load -- treat it the same
+        # as "couldn't find a weight" rather than silently dropping the sign
+        return None
     unit = wm.group(2).lower()
-    return round(val / 1000, 3) if unit == "kg" else val
+    return round(val / 1000, 3) if unit in ("kg", "kgs") else val
+
+
+def _extract_weight_from_field(raw):
+    """Parses the Weight: field's value specifically. Unlike the general
+    whole-text fallback, this also accepts a bare number with no unit at all
+    (e.g. "25" or "25000") -- a labeled Weight field is unambiguously a
+    weight, so rather than showing no per-ton price at all, infer tons vs
+    kilograms from typical truck-load scale (a real load is realistically
+    1-100 tons; anything bigger was almost certainly typed in kg)."""
+    if not raw:
+        return None
+    tons = _extract_weight_tons(raw)
+    if tons is not None:
+        return tons
+    m = BARE_NUMBER_RE.match(raw.strip())
+    if not m:
+        return None
+    val = float(m.group(1).replace(',', ''))
+    if val <= 0:
+        return None
+    return round(val / 1000, 3) if val > 100 else val
 
 
 def _fill_route_from_freetext(lines, used_lines):
@@ -136,7 +164,7 @@ def parse_post(text):
                 fields[key] = _clean(m.group(1))
                 used_lines.add(i)
 
-    weight_tons = _extract_weight_tons(fields["weight_raw"]) if fields.get("weight_raw") else None
+    weight_tons = _extract_weight_from_field(fields.get("weight_raw"))
 
     origin = fields.get("origin")
     destination = fields.get("destination")

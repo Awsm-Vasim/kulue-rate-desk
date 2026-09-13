@@ -1,12 +1,14 @@
 import difflib
+import fcntl
 import json
 import os
 from datetime import datetime
+from typing import Annotated, Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.geocode import (
     GAZETTEER,
@@ -18,7 +20,7 @@ from app.geocode import (
     search_suggestions,
 )
 from app.parser import parse_post
-from app.pricing import PricingModel, suggest_vehicle_type
+from app.pricing import PricingModel, assess_offered_price, suggest_vehicle_type
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -28,23 +30,30 @@ with open(os.path.join(DATA_DIR, "training_rows.json")) as f:
     MODEL_DATA = json.load(f)
 pricing_model = PricingModel(MODEL_DATA)
 
-app = FastAPI(title="Kulue Rate Desk")
+app = FastAPI(title="Kulue Rate Calculator")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
+
+# A WhatsApp load post is never anywhere near this long -- capping input
+# length keeps a stray paste (or a deliberately huge request) from being
+# forwarded on to Nominatim/OSRM/Photon at full size.
+_ShortStr = Annotated[str, Field(max_length=200)]
 
 
 class QuoteRequest(BaseModel):
-    text: str
-    overrides: dict[str, str] | None = None
+    text: str = Field(..., min_length=1, max_length=4000)
+    overrides: dict[str, _ShortStr] | None = None
+    offered_price: float | None = Field(default=None, gt=0)
+    offered_unit: Literal["total", "per_ton"] = "total"
 
 
 class FeedbackRequest(BaseModel):
     accurate: bool
-    comment: str | None = None
+    comment: str | None = Field(default=None, max_length=2000)
     quote: dict
 
 
@@ -55,7 +64,7 @@ def health():
 
 @app.get("/api/places")
 def places(q: str = ""):
-    q = q.strip()
+    q = q.strip()[:200]
     if len(q) < 3:
         return {"places": []}
 
@@ -91,6 +100,9 @@ def quote(req: QuoteRequest):
     overrides = req.overrides or {}
     parsed["origin"] = overrides.get("origin") or parsed["origin"]
     parsed["destination"] = overrides.get("destination") or parsed["destination"]
+
+    if parsed["origin"].strip().lower() == parsed["destination"].strip().lower():
+        raise HTTPException(400, "Origin and destination can't be the same place.")
 
     geo_cache = load_cache("geocode_cache.json", seed_name="geocode_cache_seed.json")
     dist_cache = load_cache("distance_cache.json", seed_name="distance_cache_seed.json")
@@ -134,16 +146,27 @@ def quote(req: QuoteRequest):
     pred = pricing_model.predict(parsed["origin"], parsed["destination"], km, pricing_vehicle)
     per_ton = round(pred["total"] / parsed["weight_tons"]) if parsed.get("weight_tons") else None
 
+    offered_price_check = None
+    if req.offered_price is not None:
+        if req.offered_unit == "per_ton" and not parsed.get("weight_tons"):
+            raise HTTPException(400, "Enter a weight to check a per-ton offered price.")
+        offered_price_check = assess_offered_price(
+            req.offered_price, req.offered_unit, pred, parsed.get("weight_tons"), km
+        )
+
     return {
         "parsed": parsed,
         "distance_km": km,
         "rate_per_km": pred["rate_per_km"],
         "basis": pred["basis"],
+        "confidence": pred["confidence"],
+        "confidence_reason": pred["confidence_reason"],
         "suggested_vehicle_type": suggested_vehicle_type,
         "total_price_low": pred["total_low"],
         "total_price_high": pred["total_high"],
         "total_price_suggested": pred["total"],
         "price_per_ton": per_ton,
+        "offered_price_check": offered_price_check,
     }
 
 
@@ -157,18 +180,29 @@ def feedback(req: FeedbackRequest):
     manual_quotes.json (see the whatsapp-load-report pipeline's --add-quote)
     -- not auto-trained on directly, since a raw comment needs a human to
     turn it into a real route/vehicle/freight data point."""
-    entries = []
-    if os.path.exists(FEEDBACK_PATH):
-        with open(FEEDBACK_PATH) as f:
-            entries = json.load(f)
-    entries.append({
-        "at": datetime.now().isoformat(timespec="seconds"),
-        "accurate": req.accurate,
-        "comment": (req.comment or "").strip() or None,
-        "quote": req.quote,
-    })
-    with open(FEEDBACK_PATH, "w") as f:
-        json.dump(entries, f, indent=2)
+    lock_path = FEEDBACK_PATH + ".lock"
+    with open(lock_path, "a+") as lockf:
+        fcntl.flock(lockf, fcntl.LOCK_EX)
+        try:
+            entries = []
+            if os.path.exists(FEEDBACK_PATH):
+                try:
+                    with open(FEEDBACK_PATH) as f:
+                        entries = json.load(f)
+                except (json.JSONDecodeError, OSError):
+                    entries = []
+            entries.append({
+                "at": datetime.now().isoformat(timespec="seconds"),
+                "accurate": req.accurate,
+                "comment": (req.comment or "").strip() or None,
+                "quote": req.quote,
+            })
+            tmp_path = FEEDBACK_PATH + f".tmp.{os.getpid()}"
+            with open(tmp_path, "w") as f:
+                json.dump(entries, f, indent=2)
+            os.replace(tmp_path, FEEDBACK_PATH)
+        finally:
+            fcntl.flock(lockf, fcntl.LOCK_UN)
     return {"ok": True}
 
 

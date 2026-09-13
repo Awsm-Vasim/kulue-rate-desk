@@ -3,69 +3,95 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kulue Rate Desk</title>
+<title>Kulue Rate Calculator</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@600;700;900&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
   :root {
-    --bg: #f5f1e8; --surface: #ffffff; --ink: #1c1712; --muted: #7d7160; --line: #e6ded0;
-    --accent: #dd8a1e; --accent-ink: #7a4a05; --accent-soft: #fbead0;
-    --good: #3f8f5f;
-    --shadow: 0 1px 2px rgba(28,23,18,.04), 0 6px 16px -8px rgba(28,23,18,.12);
+    --bg: #f2f2f5; --surface: #ffffff; --ink: #18181a; --muted: #8b8d93; --line: #e8e8ec;
+    --accent: #ee6a2e; --accent-2: #f4923f; --accent-ink: #c1491c; --accent-soft: #fdebe1;
+    --accent-contrast: #ffffff;
+    --good: #2fa360;
+    --shadow: 0 1px 2px rgba(20,20,25,.05), 0 10px 24px -12px rgba(20,20,25,.16);
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #16130f; --surface: #211c15; --ink: #f1ece0; --muted: #a99d89; --line: #362e22;
-      --accent: #f0a53c; --accent-ink: #ffd699; --accent-soft: #3a2b12; --good: #5cbf85;
-      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px -8px rgba(0,0,0,.5);
+      --bg: #121214; --surface: #1d1d20; --ink: #f4f4f5; --muted: #9a9ba1; --line: #2d2d32;
+      --accent: #f47b3f; --accent-2: #ffab6b; --accent-ink: #ffb27e; --accent-soft: #3a2416;
+      --accent-contrast: #1a1108;
+      --good: #4cbf82;
+      --shadow: 0 1px 2px rgba(0,0,0,.35), 0 12px 28px -14px rgba(0,0,0,.55);
     }
   }
   :root[data-theme="dark"] {
-    --bg: #16130f; --surface: #211c15; --ink: #f1ece0; --muted: #a99d89; --line: #362e22;
-    --accent: #f0a53c; --accent-ink: #ffd699; --accent-soft: #3a2b12; --good: #5cbf85;
-    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px -8px rgba(0,0,0,.5);
+    --bg: #121214; --surface: #1d1d20; --ink: #f4f4f5; --muted: #9a9ba1; --line: #2d2d32;
+    --accent: #f47b3f; --accent-2: #ffab6b; --accent-ink: #ffb27e; --accent-soft: #3a2416;
+    --accent-contrast: #1a1108;
+    --good: #4cbf82;
+    --shadow: 0 1px 2px rgba(0,0,0,.35), 0 12px 28px -14px rgba(0,0,0,.55);
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); }
   body { color: var(--ink); font-family: "IBM Plex Sans", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
   .wrap { max-width: 560px; margin: 0 auto; padding: 0 16px 64px; }
   header.top { display: flex; align-items: center; gap: 12px; padding: 22px 4px 18px; }
-  .mark { width: 40px; height: 40px; border-radius: 10px; background: var(--accent); color: #1c1712;
-    display: flex; align-items: center; justify-content: center; font-family: "Libre Franklin", sans-serif;
-    font-weight: 900; font-size: 19px; flex-shrink: 0; }
-  .wordmark { font-family: "Libre Franklin", sans-serif; font-weight: 900; font-size: 21px; letter-spacing: -.01em; }
+  .mark { width: 44px; height: 44px; flex-shrink: 0; display: flex; }
+  .mark svg { width: 100%; height: 100%; }
+  .wordmark { font-family: "Poppins", sans-serif; font-weight: 700; font-size: 21px; letter-spacing: -.01em; }
   .tagline { color: var(--muted); font-size: 12.5px; margin-top: 1px; }
   section { margin-top: 18px; }
-  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 18px; }
+  .tab-bar { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--line);
+    border-radius: 999px; padding: 4px; margin-top: 4px; }
+  .tab-btn { flex: 1; appearance: none; border: none; background: none; cursor: pointer; padding: 9px 12px;
+    border-radius: 999px; font-family: "IBM Plex Sans", sans-serif; font-weight: 600; font-size: 13.5px;
+    color: var(--muted); transition: background .15s ease, color .15s ease; }
+  .tab-btn.active { background: linear-gradient(135deg, var(--accent-2), var(--accent)); color: var(--accent-contrast); }
+  .tab-panel[hidden] { display: none; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; box-shadow: var(--shadow); padding: 20px; }
   label.field-label { display: block; font-size: 11.5px; font-weight: 600; letter-spacing: .06em;
     text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  label.field-label .required-mark { color: var(--accent-ink); margin-left: 2px; }
+  .form-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+  .link-btn { appearance: none; border: none; background: none; cursor: pointer; padding: 0;
+    font-family: "IBM Plex Sans", sans-serif; font-size: 12px; font-weight: 600; color: var(--accent-ink);
+    text-decoration: underline; white-space: nowrap; }
   .form-row { position: relative; margin-bottom: 14px; }
   .form-row:last-of-type { margin-bottom: 0; }
   input.text-input { width: 100%; font-family: "IBM Plex Sans", sans-serif; font-size: 14px; color: var(--ink);
-    background: transparent; border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; outline: none; }
+    background: transparent; border: 1.5px solid var(--line); border-radius: 14px; padding: 11px 14px; outline: none; }
   input.text-input::placeholder { color: var(--muted); }
+  .offer-input-group { display: flex; gap: 8px; }
+  .offer-input-group input.text-input { flex: 1; min-width: 0; }
+  select.unit-select { flex-shrink: 0; width: 130px; font-family: "IBM Plex Sans", sans-serif; font-size: 13px;
+    color: var(--ink); background: transparent; border: 1.5px solid var(--line); border-radius: 14px;
+    padding: 10px 8px; outline: none; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238b8d93' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 8px center; }
+  select.unit-select:focus { border-color: var(--accent); }
   input.text-input:focus { border-color: var(--accent); }
   input.text-input:invalid { box-shadow: none; }
   .suggest-list { position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px; background: var(--surface);
-    border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); max-height: 220px;
+    border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); max-height: 220px;
     overflow-y: auto; z-index: 20; }
   .suggest-item { padding: 9px 12px; font-size: 13.5px; cursor: pointer; }
   .suggest-item:hover, .suggest-item.active { background: var(--accent-soft); color: var(--accent-ink); }
   .tear { border-top: 1.5px dashed var(--line); margin: 14px 0 0; padding-top: 12px;
     display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .hint { font-size: 12px; color: var(--muted); }
-  button#calcBtn { appearance: none; border: none; cursor: pointer; background: var(--accent); color: #1c1712;
-    font-family: "IBM Plex Sans", sans-serif; font-weight: 600; font-size: 14.5px; padding: 11px 20px;
-    border-radius: 10px; display: inline-flex; align-items: center; gap: 8px;
+  button#calcBtn { appearance: none; border: none; cursor: pointer;
+    background: linear-gradient(135deg, var(--accent-2), var(--accent)); color: var(--accent-contrast);
+    font-family: "IBM Plex Sans", sans-serif; font-weight: 700; font-size: 14.5px; padding: 12px 22px;
+    border-radius: 999px; display: inline-flex; align-items: center; gap: 8px;
+    box-shadow: 0 6px 16px -6px rgba(228,90,20,.55);
     transition: transform .1s ease, opacity .15s ease; white-space: nowrap; }
   button#calcBtn:active { transform: scale(.97); }
   button#calcBtn:disabled { opacity: .55; cursor: default; }
-  .spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(28,23,18,.25);
-    border-top-color: #1c1712; animation: spin .7s linear infinite; display: none; }
+  .spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255,255,255,.4);
+    border-top-color: var(--accent-contrast); animation: spin .7s linear infinite; display: none; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .loading .spinner { display: inline-block; }
   .loading .btnLabel { visibility: hidden; width: 0; overflow: hidden; }
-  #errorBox { display: none; margin-top: 12px; padding: 11px 14px; border-radius: 10px;
+  #errorBox { display: none; margin-top: 12px; padding: 11px 14px; border-radius: 14px;
     background: var(--accent-soft); color: var(--accent-ink); font-size: 13px; border: 1px solid var(--accent); }
   #confirmSection { display: none; }
   .confirm-field { margin-bottom: 12px; }
@@ -73,25 +99,29 @@
   .confirm-field label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
   .confirm-field label b { color: var(--ink); font-weight: 600; }
   .confirm-field select { width: 100%; font-family: "IBM Plex Sans", sans-serif; font-size: 14px;
-    color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 9px;
+    color: var(--ink); background: var(--surface); border: 1.5px solid var(--line); border-radius: 14px;
     padding: 9px 11px; appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%237d7160' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238b8d93' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
     background-repeat: no-repeat; background-position: right 11px center; }
-  button#confirmBtn { appearance: none; border: none; cursor: pointer; background: var(--accent); color: #1c1712;
-    font-family: "IBM Plex Sans", sans-serif; font-weight: 600; font-size: 14px; padding: 10px 18px;
-    border-radius: 10px; white-space: nowrap; }
+  button#confirmBtn { appearance: none; border: none; cursor: pointer;
+    background: linear-gradient(135deg, var(--accent-2), var(--accent)); color: var(--accent-contrast);
+    font-family: "IBM Plex Sans", sans-serif; font-weight: 700; font-size: 14px; padding: 10px 20px;
+    border-radius: 999px; white-space: nowrap; }
   .teaser-label { font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
     color: var(--muted); margin-bottom: 10px; }
   .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
-  .chip { flex-shrink: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  .chip { flex-shrink: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
     padding: 10px 13px; min-width: 152px; }
-  .chip .route { font-family: "Libre Franklin", sans-serif; font-weight: 700; font-size: 13.5px; }
+  .chip .route { font-family: "Poppins", sans-serif; font-weight: 700; font-size: 13.5px; }
   .chip .rate { font-family: "IBM Plex Mono", monospace; color: var(--accent-ink); background: var(--accent-soft);
     display: inline-block; margin-top: 6px; padding: 2px 7px; border-radius: 6px; font-size: 12px; font-weight: 500; }
   .chip .n { color: var(--muted); font-size: 11px; margin-top: 5px; }
   #result { display: none; }
+  .share-card { background: var(--surface); }
+  .share-mark { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line);
+    font-size: 10.5px; color: var(--muted); text-align: center; }
   .result-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-  .route-line { font-family: "Libre Franklin", sans-serif; font-weight: 900; font-size: 19px; }
+  .route-line { font-family: "Poppins", sans-serif; font-weight: 900; font-size: 19px; }
   .badge-basis { font-size: 11px; color: var(--muted); }
   .price-meter { margin-top: 14px; background: var(--accent-soft); border-radius: 12px; padding: 16px 18px;
     display: flex; flex-wrap: wrap; gap: 18px; justify-content: space-between; align-items: flex-end; }
@@ -102,6 +132,23 @@
   .meter-block .v small { font-size: 13px; font-weight: 500; }
   .meter-block.per-ton .v { font-size: 28px; }
   .range-line { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; color: var(--accent-ink); opacity: .85; margin-top: 4px; }
+  .confidence-line { margin-top: 6px; font-size: 12px; color: var(--muted); }
+  .confidence-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10.5px;
+    font-weight: 600; text-transform: uppercase; letter-spacing: .04em; background: var(--accent-soft);
+    color: var(--accent-ink); }
+  .offer-check { margin-top: 14px; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line);
+    border-left: 4px solid var(--line); }
+  .offer-check.verdict-fair { border-left-color: var(--good); }
+  .offer-check.verdict-low, .offer-check.verdict-high { border-left-color: var(--accent); }
+  .offer-check-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .offer-verdict { font-family: "Poppins", sans-serif; font-weight: 800; font-size: 15px; }
+  .offer-check.verdict-fair .offer-verdict { color: var(--good); }
+  .offer-check.verdict-low .offer-verdict, .offer-check.verdict-high .offer-verdict { color: var(--accent-ink); }
+  .offer-diff { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; color: var(--muted); }
+  .offer-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+  .offer-col .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .offer-col .v { font-family: "IBM Plex Mono", monospace; font-size: 16px; font-weight: 600; margin-top: 2px; }
+  .offer-col .sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
   .fact-grid { margin-top: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
   .fact .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
   .fact .v { font-family: "IBM Plex Mono", monospace; font-size: 14px; margin-top: 2px; }
@@ -110,18 +157,18 @@
   .feedback-prompt { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
   .feedback-actions { display: flex; gap: 8px; }
   .fb-btn { appearance: none; cursor: pointer; font-family: "IBM Plex Sans", sans-serif; font-size: 13px;
-    font-weight: 600; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line);
+    font-weight: 600; padding: 8px 16px; border-radius: 999px; border: 1.5px solid var(--line);
     background: var(--surface); color: var(--ink); }
   .fb-btn:hover { border-color: var(--accent); }
   .feedback-form { margin-top: 12px; }
   .feedback-form textarea { width: 100%; font-family: "IBM Plex Sans", sans-serif; font-size: 13.5px;
-    color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 9px;
+    color: var(--ink); background: transparent; border: 1.5px solid var(--line); border-radius: 14px;
     padding: 9px 11px; resize: vertical; outline: none; }
   .feedback-form textarea:focus { border-color: var(--accent); }
   .feedback-form textarea::placeholder { color: var(--muted); }
   .feedback-thanks { margin-top: 10px; font-size: 12.5px; color: var(--good); font-weight: 600; }
-  h2.section-title { font-family: "Libre Franklin", sans-serif; font-weight: 700; font-size: 14px; margin: 0 0 10px; }
-  .ledger { display: flex; flex-direction: column; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  h2.section-title { font-family: "Poppins", sans-serif; font-weight: 700; font-size: 14px; margin: 0 0 10px; }
+  .ledger { display: flex; flex-direction: column; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
   .ledger-row { background: var(--surface); padding: 11px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .ledger-row .route { font-weight: 600; font-size: 13.5px; }
   .ledger-row .meta { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
@@ -135,23 +182,45 @@
 <body>
 <div class="wrap">
   <header class="top">
-    <div class="mark">₹</div>
+    <div class="mark" aria-hidden="true">
+      <svg viewBox="0 0 64 64" role="img" aria-label="Kulue">
+        <defs>
+          <linearGradient id="kulueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#f6a04c"/>
+            <stop offset="100%" stop-color="#e34f16"/>
+          </linearGradient>
+        </defs>
+        <circle cx="32" cy="32" r="32" fill="url(#kulueGrad)"/>
+        <text x="32" y="35" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="700" font-size="16" fill="#ffffff">kulue</text>
+        <path d="M21 41 Q32 49 43 41" stroke="#ffffff" stroke-width="3.2" fill="none" stroke-linecap="round"/>
+      </svg>
+    </div>
     <div>
-      <div class="wordmark">Kulue Rate Desk</div>
+      <div class="wordmark">Kulue Rate Calculator</div>
       <div class="tagline">Paste a load post, get a driver-ready price</div>
     </div>
   </header>
 
+  <div class="tab-bar">
+    <button type="button" class="tab-btn active" data-tab="calculator">Calculator</button>
+    <button type="button" class="tab-btn" data-tab="history">History</button>
+  </div>
+
+  <div id="calculatorTab" class="tab-panel">
   <section>
     <div class="card">
       <form id="loadForm">
+        <div class="form-head">
+          <span class="hint"><span class="required-mark">*</span> Required field</span>
+          <button type="button" id="clearBtn" class="link-btn">Clear</button>
+        </div>
         <div class="form-row">
-          <label class="field-label" for="fromInput">From</label>
+          <label class="field-label" for="fromInput">From<span class="required-mark">*</span></label>
           <input id="fromInput" class="text-input" type="text" autocomplete="off" required placeholder="Origin place">
           <div class="suggest-list" id="fromSuggest" hidden></div>
         </div>
         <div class="form-row">
-          <label class="field-label" for="toInput">To</label>
+          <label class="field-label" for="toInput">To<span class="required-mark">*</span></label>
           <input id="toInput" class="text-input" type="text" autocomplete="off" required placeholder="Destination place">
           <div class="suggest-list" id="toSuggest" hidden></div>
         </div>
@@ -161,15 +230,25 @@
         </div>
         <div class="form-row">
           <label class="field-label" for="materialInput">Material</label>
-          <input id="materialInput" class="text-input" type="text" required placeholder="e.g. feed">
+          <input id="materialInput" class="text-input" type="text" placeholder="Optional — e.g. feed">
         </div>
         <div class="form-row">
-          <label class="field-label" for="weightInput">Weight</label>
+          <label class="field-label" for="weightInput">Weight<span class="required-mark">*</span></label>
           <input id="weightInput" class="text-input" type="text" required placeholder="e.g. 25ton">
         </div>
         <div class="form-row">
           <label class="field-label" for="loadingInput">Loading &amp; Unloading</label>
           <input id="loadingInput" class="text-input" type="text" placeholder="Optional — e.g. included">
+        </div>
+        <div class="form-row">
+          <label class="field-label" for="offeredInput">Offered Price (₹)</label>
+          <div class="offer-input-group">
+            <input id="offeredInput" class="text-input" type="number" min="0" step="1" inputmode="numeric" placeholder="Optional — check a price you were quoted">
+            <select id="offeredUnitSelect" class="unit-select">
+              <option value="total">Total amount</option>
+              <option value="per_ton">Per ton</option>
+            </select>
+          </div>
         </div>
         <div class="tear">
           <span class="hint">Uses real driving distance + Kulue's own rate data — no external AI call.</span>
@@ -198,29 +277,57 @@
 
   <section id="result">
     <div class="card">
-      <div class="result-head">
-        <div class="route-line" id="resRoute">—</div>
-        <div class="badge-basis" id="resDate"></div>
-      </div>
-      <div class="price-meter">
-        <div class="meter-block">
-          <div class="k">Suggested total</div>
-          <div class="v"><small>₹</small><span id="resTotal">—</span></div>
-          <div class="range-line" id="resRange"></div>
+      <div class="share-card" id="shareCard">
+        <div class="result-head">
+          <div class="route-line" id="resRoute">—</div>
+          <div class="badge-basis" id="resDate"></div>
         </div>
-        <div class="meter-block per-ton">
-          <div class="k">Per ton</div>
-          <div class="v"><small>₹</small><span id="resPerTon">—</span></div>
+        <div class="confidence-line">
+          Confidence: <span class="confidence-pill" id="resConfidence">—</span>
         </div>
+        <div class="price-meter">
+          <div class="meter-block">
+            <div class="k">Suggested total</div>
+            <div class="v"><small>₹</small><span id="resTotal">—</span></div>
+            <div class="range-line" id="resRange"></div>
+          </div>
+          <div class="meter-block per-ton">
+            <div class="k">Per ton</div>
+            <div class="v"><small>₹</small><span id="resPerTon">—</span></div>
+          </div>
+        </div>
+        <div class="fact-grid">
+          <div class="fact"><div class="k">Distance</div><div class="v" id="factKm">—</div></div>
+          <div class="fact"><div class="k">Rate</div><div class="v" id="factRate">—</div></div>
+          <div class="fact"><div class="k">Vehicle</div><div class="v" id="factVeh">—</div></div>
+          <div class="fact"><div class="k">Material</div><div class="v" id="factMat">—</div></div>
+          <div class="fact"><div class="k">Loading/Unloading</div><div class="v" id="factLoad">—</div></div>
+        </div>
+        <div class="offer-check" id="offerCheck" hidden>
+          <div class="offer-check-head">
+            <span class="offer-verdict" id="offerVerdict">—</span>
+            <span class="offer-diff" id="offerDiff"></span>
+          </div>
+          <div class="offer-compare">
+            <div class="offer-col">
+              <div class="k">You were offered</div>
+              <div class="v" id="offerAmount">—</div>
+              <div class="sub" id="offerPerUnit"></div>
+            </div>
+            <div class="offer-col">
+              <div class="k">Suggested</div>
+              <div class="v" id="offerSuggested">—</div>
+              <div class="sub" id="offerSuggestedPerUnit"></div>
+            </div>
+          </div>
+        </div>
+        <div class="notes" id="resNotes"></div>
+        <div class="share-mark">Kulue Rate Calculator — directional market estimate, not a guaranteed rate.</div>
       </div>
-      <div class="fact-grid">
-        <div class="fact"><div class="k">Distance</div><div class="v" id="factKm">—</div></div>
-        <div class="fact"><div class="k">Rate</div><div class="v" id="factRate">—</div></div>
-        <div class="fact"><div class="k">Vehicle</div><div class="v" id="factVeh">—</div></div>
-        <div class="fact"><div class="k">Material</div><div class="v" id="factMat">—</div></div>
-        <div class="fact"><div class="k">Loading/Unloading</div><div class="v" id="factLoad">—</div></div>
+      <div class="tear">
+        <span class="hint">Save this quote as an image to share.</span>
+        <button type="button" id="downloadImgBtn" class="fb-btn">Download as image</button>
       </div>
-      <div class="notes" id="resNotes"></div>
       <div class="feedback-block" id="feedbackBlock">
         <div class="feedback-prompt" id="feedbackPrompt">
           <span class="hint">Was this price accurate?</span>
@@ -241,9 +348,13 @@
       </div>
     </div>
   </section>
+  </div>
 
-  <section>
-    <h2 class="section-title">Recent quotes (this device)</h2>
+  <section id="historyTab" class="tab-panel" hidden>
+    <div class="form-head">
+      <h2 class="section-title" style="margin:0;">Recent quotes (this device)</h2>
+      <button type="button" id="clearHistoryBtn" class="link-btn">Clear history</button>
+    </div>
     <div class="ledger" id="historyList">
       <div class="empty-hist">Your calculated quotes will appear here.</div>
     </div>
@@ -252,6 +363,7 @@
   <footer class="foot">Trained on Kulue's accumulated WhatsApp transport-group dataset · figures are directional market estimates, not a guaranteed rate.</footer>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
 (function () {
   "use strict";
@@ -265,6 +377,8 @@
     materialInput: document.getElementById("materialInput"),
     weightInput: document.getElementById("weightInput"),
     loadingInput: document.getElementById("loadingInput"),
+    offeredInput: document.getElementById("offeredInput"),
+    offeredUnitSelect: document.getElementById("offeredUnitSelect"),
     calcBtn: document.getElementById("calcBtn"),
     errorBox: document.getElementById("errorBox"),
     result: document.getElementById("result"),
@@ -279,6 +393,16 @@
     factMat: document.getElementById("factMat"),
     factLoad: document.getElementById("factLoad"),
     resNotes: document.getElementById("resNotes"),
+    shareCard: document.getElementById("shareCard"),
+    downloadImgBtn: document.getElementById("downloadImgBtn"),
+    resConfidence: document.getElementById("resConfidence"),
+    offerCheck: document.getElementById("offerCheck"),
+    offerVerdict: document.getElementById("offerVerdict"),
+    offerDiff: document.getElementById("offerDiff"),
+    offerAmount: document.getElementById("offerAmount"),
+    offerPerUnit: document.getElementById("offerPerUnit"),
+    offerSuggested: document.getElementById("offerSuggested"),
+    offerSuggestedPerUnit: document.getElementById("offerSuggestedPerUnit"),
     historyList: document.getElementById("historyList"),
     teaserChips: document.getElementById("teaserChips"),
     confirmSection: document.getElementById("confirmSection"),
@@ -295,16 +419,20 @@
   };
   var pendingText = null;
   var pendingOverrides = {};
+  var pendingOfferedPrice = null;
+  var pendingOfferedUnit = "total";
   var lastQuoteData = null;
   var inr = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
   function money(n) { return inr.format(Math.round(n)); }
   function esc(s) { var d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; }
 
-  els.fromInput.value = "Begur, mysuru";
-  els.toInput.value = "Udumulpettai";
-  els.vehicleInput.value = "12 wheel";
-  els.materialInput.value = "feed";
-  els.weightInput.value = "25ton";
+  document.getElementById("clearBtn").addEventListener("click", function () {
+    els.loadForm.reset();
+    clearError();
+    hideConfirm();
+    els.result.style.display = "none";
+    els.fromInput.focus();
+  });
 
   function setupAutocomplete(inputEl, listEl) {
     var debounceTimer = null;
@@ -403,6 +531,24 @@
   }
   renderHistory(loadHistory());
 
+  document.getElementById("clearHistoryBtn").addEventListener("click", function () {
+    try { localStorage.removeItem(HIST_KEY); } catch (e) {}
+    els.historyList.innerHTML = '<div class="empty-hist">Your calculated quotes will appear here.</div>';
+  });
+
+  var calculatorTab = document.getElementById("calculatorTab");
+  var historyTab = document.getElementById("historyTab");
+  var tabButtons = document.querySelectorAll(".tab-btn");
+  tabButtons.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      tabButtons.forEach(function (b) { b.classList.remove("active"); });
+      btn.classList.add("active");
+      var isHistory = btn.getAttribute("data-tab") === "history";
+      calculatorTab.hidden = isHistory;
+      historyTab.hidden = !isHistory;
+    });
+  });
+
   function renderTeaser(corridors) {
     els.teaserChips.innerHTML = corridors.map(function (c) {
       return '<div class="chip"><div class="route">' + esc(c.a) + ' ↔ ' + esc(c.b) + '</div>' +
@@ -486,6 +632,30 @@
     }
     els.factMat.textContent = p.material || "—";
     els.factLoad.textContent = p.loading_unloading || "—";
+    els.resConfidence.textContent = data.confidence ? data.confidence.toUpperCase() : "—";
+    els.resConfidence.title = data.confidence_reason || "";
+
+    var oc = data.offered_price_check;
+    if (oc) {
+      els.offerCheck.hidden = false;
+      els.offerCheck.className = "offer-check verdict-" + oc.verdict;
+      els.offerVerdict.textContent = oc.verdict === "fair" ? "Fair — in line with market"
+        : oc.verdict === "low" ? "Below market" : "Above market";
+      els.offerDiff.textContent = (oc.diff_pct > 0 ? "+" : "") + oc.diff_pct + "% vs suggested";
+      els.offerAmount.textContent = "₹" + money(oc.offered_price);
+      var offerSub = [];
+      if (oc.offered_per_ton != null) offerSub.push("₹" + money(oc.offered_per_ton) + "/ton");
+      if (oc.offered_per_km != null) offerSub.push("₹" + oc.offered_per_km + "/km");
+      els.offerPerUnit.textContent = offerSub.join(" · ");
+      els.offerSuggested.textContent = "₹" + money(oc.suggested_total);
+      var sugSub = [];
+      if (oc.suggested_per_ton != null) sugSub.push("₹" + money(oc.suggested_per_ton) + "/ton");
+      sugSub.push("₹" + oc.suggested_per_km + "/km");
+      els.offerSuggestedPerUnit.textContent = sugSub.join(" · ");
+    } else {
+      els.offerCheck.hidden = true;
+    }
+
     var notes = data.basis || "";
     if (!p.vehicle_type && data.suggested_vehicle_type) {
       notes += " No vehicle type given -- suggesting " + data.suggested_vehicle_type +
@@ -516,19 +686,24 @@
     els.confirmFields.innerHTML = "";
   }
 
-  async function runQuote(text, overrides) {
+  async function runQuote(text, overrides, offeredPrice, offeredUnit) {
     clearError();
     setLoading(true);
     try {
       var res = await fetch("/api/quote", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: text, overrides: overrides }),
+        body: JSON.stringify({
+          text: text, overrides: overrides,
+          offered_price: offeredPrice || null, offered_unit: offeredUnit || "total",
+        }),
       });
       var data = await res.json();
       if (!res.ok) { hideConfirm(); showError(data.detail || "Couldn't calculate a price for that post."); return; }
       if (data.needs_confirmation && data.needs_confirmation.length) {
         pendingText = text;
         pendingOverrides = overrides || {};
+        pendingOfferedPrice = offeredPrice || null;
+        pendingOfferedUnit = offeredUnit || "total";
         showConfirm(data.needs_confirmation);
         return;
       }
@@ -557,17 +732,44 @@
     ].join("\n");
   }
 
+  els.downloadImgBtn.addEventListener("click", function () {
+    if (typeof html2canvas !== "function") {
+      showError("Image export isn't available right now -- check your connection and try again.");
+      return;
+    }
+    var btn = els.downloadImgBtn;
+    var originalLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Preparing...";
+    var bg = getComputedStyle(document.body).getPropertyValue("--surface").trim() || "#ffffff";
+    html2canvas(els.shareCard, { backgroundColor: bg, scale: 2 }).then(function (canvas) {
+      var p = (lastQuoteData && lastQuoteData.parsed) || {};
+      var slug = ((p.origin || "quote") + "-to-" + (p.destination || "")).toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+      var link = document.createElement("a");
+      link.download = "kulue-" + slug + ".png";
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    }).catch(function () {
+      showError("Couldn't generate the image -- please try again.");
+    }).finally(function () {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    });
+  });
+
   els.loadForm.addEventListener("submit", function (e) {
     e.preventDefault();
     hideConfirm();
-    runQuote(buildPostText(), {});
+    var offered = els.offeredInput.value.trim();
+    runQuote(buildPostText(), {}, offered ? parseFloat(offered) : null, els.offeredUnitSelect.value);
   });
 
   els.confirmBtn.addEventListener("click", function () {
     var selects = els.confirmFields.querySelectorAll("select[data-field]");
     var overrides = Object.assign({}, pendingOverrides);
     selects.forEach(function (sel) { overrides[sel.getAttribute("data-field")] = sel.value; });
-    runQuote(pendingText, overrides);
+    runQuote(pendingText, overrides, pendingOfferedPrice, pendingOfferedUnit);
   });
 })();
 </script>

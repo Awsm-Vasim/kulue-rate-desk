@@ -124,6 +124,7 @@ class PricingModel:
         if corridor and corridor["n"] >= MIN_CORRIDOR_N:
             rate = corridor["median_per_km"]
             total = round(distance_km * rate)
+            confidence = "high" if corridor["n"] >= 5 else "medium"
             return {
                 "rate_per_km": rate,
                 "total": total,
@@ -131,20 +132,38 @@ class PricingModel:
                 "total_high": max(corridor["max_freight"], total),
                 "basis": (f"Matched known corridor {corridor['a']} ↔ {corridor['b']} "
                           f"({corridor['n']} historical WhatsApp quotes, median ₹{rate}/km)."),
+                "confidence": confidence,
+                "confidence_reason": f"Based on {corridor['n']} real historical quotes for this exact corridor.",
             }
 
         base_rate = self._bucket_rate(distance_km)
         factor = 1.0
         veh_note = ""
+        matched_vehicle = False
         if vehicle_type:
             match = self._vehicle_factor_norm.get(_normalize_vehicle(vehicle_type))
             if match:
                 canonical, factor = match
                 veh_note = f", adjusted for {canonical} vehicles"
+                matched_vehicle = True
         rate = base_rate * factor
         total = distance_km * rate
         low = total * math.exp(-self.resid_std)
         high = total * math.exp(self.resid_std)
+
+        if matched_vehicle and self.resid_std <= 0.5:
+            confidence = "medium"
+            confidence_reason = ("Distance-based estimate adjusted for this vehicle type from historical "
+                                  "data, but no exact-route match yet.")
+        elif matched_vehicle:
+            confidence = "low"
+            confidence_reason = ("Vehicle-adjusted estimate, but historical quotes at this distance vary "
+                                  "widely, so treat it as a rough guide.")
+        else:
+            confidence = "low"
+            confidence_reason = ("Generic distance-based estimate -- no exact-route match and no vehicle-"
+                                  "specific data, so treat it as a rough guide.")
+
         return {
             "rate_per_km": round(rate, 1),
             "total": round(total),
@@ -152,4 +171,42 @@ class PricingModel:
             "total_high": round(high),
             "basis": (f"Distance-based model fit on {self.n_rows} historical quotes "
                       f"({round(distance_km)} km){veh_note}."),
+            "confidence": confidence,
+            "confidence_reason": confidence_reason,
         }
+
+
+def assess_offered_price(offered_value, offered_unit, pred, weight_tons, distance_km):
+    """Compares a poster-supplied offered price -- either a total trip amount
+    or a per-ton rate -- against the model's own suggested total/range for
+    the same trip. Returns None if a per-ton offer can't be converted
+    because no weight was given."""
+    if offered_unit == "per_ton":
+        if not weight_tons:
+            return None
+        offered_total = offered_value * weight_tons
+    else:
+        offered_total = offered_value
+
+    total = pred["total"]
+    low, high = pred["total_low"], pred["total_high"]
+    if low <= offered_total <= high:
+        verdict = "fair"
+    elif offered_total < low:
+        verdict = "low"
+    else:
+        verdict = "high"
+    return {
+        "offered_value": offered_value,
+        "offered_unit": offered_unit,
+        "offered_price": round(offered_total),
+        "offered_per_ton": round(offered_total / weight_tons) if weight_tons else None,
+        "offered_per_km": round(offered_total / distance_km, 1) if distance_km else None,
+        "suggested_total": total,
+        "suggested_per_ton": round(total / weight_tons) if weight_tons else None,
+        "suggested_per_km": pred["rate_per_km"],
+        "verdict": verdict,
+        "diff_pct": round(100 * (offered_total - total) / total, 1) if total else None,
+        "confidence": pred.get("confidence"),
+        "confidence_reason": pred.get("confidence_reason"),
+    }

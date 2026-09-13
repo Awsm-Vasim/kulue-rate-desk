@@ -21,6 +21,7 @@ better-known nearby place name -- guessing wrong here silently mis-prices a
 trip, which is worse than asking.
 """
 import difflib
+import fcntl
 import json
 import os
 import ssl
@@ -69,8 +70,34 @@ def load_cache(name, seed_name=None):
 
 
 def save_cache(name, data):
-    with open(_cache_path(name), "w") as f:
-        json.dump(data, f)
+    """Merges `data` into whatever is currently on disk, under an exclusive
+    file lock, instead of blindly overwriting the file with this request's
+    in-memory snapshot.
+
+    Without this, two concurrent requests each load the cache, add their own
+    new place, and save -- the second save's whole-file write clobbers the
+    first request's new entry. Locking the read-merge-write cycle (and
+    merging rather than replacing) means concurrent requests each contribute
+    their new keys instead of racing to overwrite one another."""
+    path = _cache_path(name)
+    lock_path = path + ".lock"
+    with open(lock_path, "a+") as lockf:
+        fcntl.flock(lockf, fcntl.LOCK_EX)
+        try:
+            current = {}
+            if os.path.exists(path):
+                try:
+                    with open(path) as f:
+                        current = json.load(f)
+                except (json.JSONDecodeError, OSError):
+                    current = {}
+            current.update(data)
+            tmp_path = path + f".tmp.{os.getpid()}"
+            with open(tmp_path, "w") as f:
+                json.dump(current, f)
+            os.replace(tmp_path, path)
+        finally:
+            fcntl.flock(lockf, fcntl.LOCK_UN)
 
 
 def _load_gazetteer():

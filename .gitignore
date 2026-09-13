@@ -12,3 +12,8 @@ data/distance_cache.json
 # user-submitted quote feedback (accurate/comment) -- accumulates locally,
 # reviewed and folded into manual_quotes.json / training data by hand
 data/feedback.json
+
+# lock files + atomic-write temp files used by the locked read-merge-write
+# helpers in app/main.py and app/geocode.py -- never meant to be committed
+data/*.lock
+data/*.tmp.*

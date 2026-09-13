@@ -1,35 +1,36 @@
 {
-  "generated_at": "2026-09-12T13:54:55.597987",
-  "sample_size": 192,
+  "generated_at": "2026-09-13T12:03:59.840966",
+  "sample_size": 219,
   "overall_per_km": {
-    "n": 192,
-    "min": 22.9,
+    "n": 219,
+    "min": 8.1,
     "max": 1415.9,
-    "avg": 121.0,
+    "avg": 116.7,
     "median": 60.3
   },
   "bucket_avg_per_km": {
     "0": 823.6,
-    "50": 196.6,
+    "50": 195.7,
     "100": 98.0,
-    "150": 72.4,
-    "200": 62.1,
-    "250": 51.5,
-    "300": 55.7,
+    "150": 69.1,
+    "200": 61.4,
+    "250": 51.2,
+    "300": 56.3,
     "350": 61.4,
-    "400": 63.5,
+    "400": 62.6,
     "450": 39.9,
     "500": 49.0,
     "600": 28.0,
     "650": 45.2,
-    "1200": 57.9
+    "700": 43.6,
+    "1200": 57.7
   },
   "known_corridors": [
     {
       "a": "Coimbatore",
       "b": "Palakkad",
       "km": 74.9,
-      "n": 35,
+      "n": 37,
       "median_per_km": 186.9,
       "min_freight": 4000,
       "max_freight": 30000,
@@ -44,7 +45,7 @@
       "a": "Coimbatore",
       "b": "Kollam",
       "km": 314.9,
-      "n": 29,
+      "n": 31,
       "median_per_km": 55.6,
       "min_freight": 14000,
       "max_freight": 19000,
@@ -71,7 +72,7 @@
       "a": "Coimbatore",
       "b": "Ernakulam",
       "km": 178.3,
-      "n": 8,
+      "n": 9,
       "median_per_km": 56.1,
       "min_freight": 9500,
       "max_freight": 10000,
@@ -84,12 +85,25 @@
       "a": "Malappuram",
       "b": "Mumbai",
       "km": 1224.2,
-      "n": 7,
+      "n": 8,
       "median_per_km": 56.4,
       "min_freight": 69000,
       "max_freight": 82000,
       "vehicles": [
         "12 wheel"
+      ]
+    },
+    {
+      "a": "Kottakkal",
+      "b": "Madathikulam",
+      "km": 62.3,
+      "n": 7,
+      "median_per_km": 160.5,
+      "min_freight": 10000,
+      "max_freight": 11500,
+      "vehicles": [
+        "20 ft",
+        "6 wheel"
       ]
     },
     {
@@ -105,6 +119,44 @@
       ]
     },
     {
+      "a": "Bangalore",
+      "b": "Malappuram",
+      "km": 323.1,
+      "n": 6,
+      "median_per_km": 83.6,
+      "min_freight": 19000,
+      "max_freight": 27000,
+      "vehicles": [
+        "12 wheel",
+        "17 ft",
+        "18 ft"
+      ]
+    },
+    {
+      "a": "Erode",
+      "b": "Mangalore",
+      "km": 400.1,
+      "n": 6,
+      "median_per_km": 65.0,
+      "min_freight": 26000,
+      "max_freight": 26000,
+      "vehicles": [
+        "6 wheel"
+      ]
+    },
+    {
+      "a": "Calicut",
+      "b": "Hosur",
+      "km": 383.0,
+      "n": 6,
+      "median_per_km": 54.8,
+      "min_freight": 21000,
+      "max_freight": 21000,
+      "vehicles": [
+        "22 ft"
+      ]
+    },
+    {
       "a": "Dindigul",
       "b": "Thiruvananthapuram",
       "km": 322.6,
@@ -117,17 +169,31 @@
       ]
     },
     {
-      "a": "Bangalore",
-      "b": "Malappuram",
-      "km": 323.1,
+      "a": "Coimbatore",
+      "b": "Kottakkal",
+      "km": 135.8,
       "n": 5,
-      "median_per_km": 83.6,
-      "min_freight": 19000,
-      "max_freight": 27000,
+      "median_per_km": 66.3,
+      "min_freight": 1100,
+      "max_freight": 10500,
       "vehicles": [
-        "12 wheel",
         "17 ft",
-        "18 ft"
+        "19 ft",
+        "20 ft",
+        "22 ft"
+      ]
+    },
+    {
+      "a": "Coimbatore",
+      "b": "Kannur",
+      "km": 264.9,
+      "n": 5,
+      "median_per_km": 45.3,
+      "min_freight": 11500,
+      "max_freight": 18000,
+      "vehicles": [
+        "19 ft",
+        "20 ft"
       ]
     },
     {
@@ -171,18 +237,6 @@
       ]
     },
     {
-      "a": "Calicut",
-      "b": "Hosur",
-      "km": 383.0,
-      "n": 4,
-      "median_per_km": 54.8,
-      "min_freight": 21000,
-      "max_freight": 21000,
-      "vehicles": [
-        "22 ft"
-      ]
-    },
-    {
       "a": "Coimbatore",
       "b": "Malappuram",
       "km": 132.2,
@@ -209,19 +263,6 @@
       ]
     },
     {
-      "a": "Coimbatore",
-      "b": "Kannur",
-      "km": 264.9,
-      "n": 4,
-      "median_per_km": 45.3,
-      "min_freight": 11500,
-      "max_freight": 18000,
-      "vehicles": [
-        "19 ft",
-        "20 ft"
-      ]
-    },
-    {
       "a": "Calicut",
       "b": "Coimbatore",
       "km": 177.4,
@@ -235,28 +276,15 @@
       ]
     },
     {
-      "a": "Erode",
-      "b": "Mangalore",
-      "km": 400.1,
-      "n": 3,
-      "median_per_km": 65.0,
-      "min_freight": 26000,
-      "max_freight": 26000,
-      "vehicles": [
-        "6 wheel"
-      ]
-    },
-    {
       "a": "Kottakkal",
-      "b": "Madathikulam",
-      "km": 62.3,
-      "n": 3,
-      "median_per_km": 160.5,
-      "min_freight": 10000,
+      "b": "Sathyamangalam",
+      "km": 193.1,
+      "n": 4,
+      "median_per_km": 58.3,
+      "min_freight": 11000,
       "max_freight": 11500,
       "vehicles": [
-        "20 ft",
-        "6 wheel"
+        "20 ft"
       ]
     },
     {
@@ -353,19 +381,6 @@
       "min_freight": 8500,
       "max_freight": 8500,
       "vehicles": [
-        "20 ft"
-      ]
-    },
-    {
-      "a": "Coimbatore",
-      "b": "Kottakkal",
-      "km": 135.8,
-      "n": 2,
-      "median_per_km": 69.9,
-      "min_freight": 9000,
-      "max_freight": 10000,
-      "vehicles": [
-        "19 ft",
         "20 ft"
       ]
     },
@@ -611,6 +626,42 @@
       ]
     },
     {
+      "a": "Kozhikode",
+      "b": "Thodupuzha",
+      "km": 226.7,
+      "n": 1,
+      "median_per_km": 35.3,
+      "min_freight": 8000,
+      "max_freight": 8000,
+      "vehicles": [
+        "10 wheel"
+      ]
+    },
+    {
+      "a": "Palakkad",
+      "b": "Salem",
+      "km": 245.9,
+      "n": 1,
+      "median_per_km": 61.0,
+      "min_freight": 15000,
+      "max_freight": 15000,
+      "vehicles": [
+        "10 wheel"
+      ]
+    },
+    {
+      "a": "Chennai",
+      "b": "Ernakulam",
+      "km": 688.8,
+      "n": 1,
+      "median_per_km": 43.6,
+      "min_freight": 30000,
+      "max_freight": 30000,
+      "vehicles": [
+        "20 ft"
+      ]
+    },
+    {
       "a": "Kalamassery",
       "b": "Palladam",
       "km": 201.8,
@@ -625,31 +676,31 @@
   ],
   "vehicle_rate_median_per_km": {
     "19 ft": {
-      "n": 22,
-      "median_per_km": 54.8
+      "n": 23,
+      "median_per_km": 54.0
     },
     "12 wheel": {
-      "n": 12,
+      "n": 14,
       "median_per_km": 61.7
     },
     "6 wheel": {
-      "n": 17,
+      "n": 20,
       "median_per_km": 65.0
     },
     "17 ft": {
-      "n": 18,
-      "median_per_km": 55.7
+      "n": 21,
+      "median_per_km": 55.6
     },
     "20 ft": {
-      "n": 87,
+      "n": 100,
       "median_per_km": 60.3
     },
     "22 ft": {
-      "n": 10,
-      "median_per_km": 61.2
+      "n": 13,
+      "median_per_km": 54.8
     },
     "10 wheel": {
-      "n": 15,
+      "n": 17,
       "median_per_km": 65.1
     },
     "14 wheel": {
@@ -2185,6 +2236,222 @@
       "veh": "20 ft",
       "freight": 15000,
       "per_km": 55.8
+    },
+    {
+      "o": "Erode",
+      "d": "Mangalore",
+      "km": 400.1,
+      "veh": "6 wheel",
+      "freight": 26000,
+      "per_km": 65.0
+    },
+    {
+      "o": "Thodupuzha",
+      "d": "Kozhikode",
+      "km": 226.7,
+      "veh": "10 wheel",
+      "freight": 8000,
+      "per_km": 35.3
+    },
+    {
+      "o": "Kottakkal",
+      "d": "Sathyamangalam",
+      "km": 193.1,
+      "veh": "20 ft",
+      "freight": 11500,
+      "per_km": 59.6
+    },
+    {
+      "o": "Kottakkal",
+      "d": "Sathyamangalam",
+      "km": 193.1,
+      "veh": "20 ft",
+      "freight": 11000,
+      "per_km": 57.0
+    },
+    {
+      "o": "Kannur",
+      "d": "Coimbatore",
+      "km": 264.9,
+      "veh": "20 ft",
+      "freight": 14000,
+      "per_km": 52.9
+    },
+    {
+      "o": "Kottakkal",
+      "d": "Madathikulam",
+      "km": 62.3,
+      "veh": "20 ft",
+      "freight": 10000,
+      "per_km": 160.5
+    },
+    {
+      "o": "Kottakkal",
+      "d": "Sathyamangalam",
+      "km": 193.1,
+      "veh": "20 ft",
+      "freight": 11000,
+      "per_km": 57.0
+    },
+    {
+      "o": "Kottakkal",
+      "d": "Madathikulam",
+      "km": 62.3,
+      "veh": "20 ft",
+      "freight": 10000,
+      "per_km": 160.5
+    },
+    {
+      "o": "Coimbatore",
+      "d": "Kollam",
+      "km": 314.9,
+      "veh": "17 ft",
+      "freight": 17500,
+      "per_km": 55.6
+    },
+    {
+      "o": "Kottakkal",
+      "d": "Madathikulam",
+      "km": 62.3,
+      "veh": "20 ft",
+      "freight": 10000,
+      "per_km": 160.5
+    },
+    {
+      "o": "Palakkad",
+      "d": "Salem",
+      "km": 245.9,
+      "veh": "10 wheel",
+      "freight": 15000,
+      "per_km": 61.0
+    },
+    {
+      "o": "Kottakkal",
+      "d": "Madathikulam",
+      "km": 62.3,
+      "veh": "20 ft",
+      "freight": 10000,
+      "per_km": 160.5
+    },
+    {
+      "o": "Chennai",
+      "d": "Ernakulam",
+      "km": 688.8,
+      "veh": "20 ft",
+      "freight": 30000,
+      "per_km": 43.6
+    },
+    {
+      "o": "Hosur",
+      "d": "Calicut",
+      "km": 383.0,
+      "veh": "22 ft",
+      "freight": 21000,
+      "per_km": 54.8
+    },
+    {
+      "o": "Kottakkal",
+      "d": "Coimbatore",
+      "km": 135.8,
+      "veh": "22 ft",
+      "freight": 1100,
+      "per_km": 8.1
+    },
+    {
+      "o": "Hosur",
+      "d": "Calicut",
+      "km": 383.0,
+      "veh": "22 ft",
+      "freight": 21000,
+      "per_km": 54.8
+    },
+    {
+      "o": "Kottakkal",
+      "d": "Coimbatore",
+      "km": 135.8,
+      "veh": "20 ft",
+      "freight": 10500,
+      "per_km": 77.3
+    },
+    {
+      "o": "Coimbatore",
+      "d": "Kollam",
+      "km": 314.9,
+      "veh": "17 ft",
+      "freight": 17500,
+      "per_km": 55.6
+    },
+    {
+      "o": "Coimbatore",
+      "d": "Palakkad",
+      "km": 74.9,
+      "veh": "20 ft",
+      "freight": 18500,
+      "per_km": 247.0
+    },
+    {
+      "o": "Coimbatore",
+      "d": "Palakkad",
+      "km": 74.9,
+      "veh": "20 ft",
+      "freight": 18500,
+      "per_km": 247.0
+    },
+    {
+      "o": "Coimbatore",
+      "d": "Ernakulam",
+      "km": 178.3,
+      "veh": "19 ft",
+      "freight": 9500,
+      "per_km": 53.3
+    },
+    {
+      "o": "Kottakkal",
+      "d": "Sathyamangalam",
+      "km": 193.1,
+      "veh": "20 ft",
+      "freight": 11500,
+      "per_km": 59.6
+    },
+    {
+      "o": "Erode",
+      "d": "Mangalore",
+      "km": 400.1,
+      "veh": "6 wheel",
+      "freight": 26000,
+      "per_km": 65.0
+    },
+    {
+      "o": "Erode",
+      "d": "Mangalore",
+      "km": 400.1,
+      "veh": "6 wheel",
+      "freight": 26000,
+      "per_km": 65.0
+    },
+    {
+      "o": "Kottakkal",
+      "d": "Coimbatore",
+      "km": 135.8,
+      "veh": "17 ft",
+      "freight": 8000,
+      "per_km": 58.9
+    },
+    {
+      "o": "Malappuram",
+      "d": "Bangalore",
+      "km": 323.1,
+      "veh": "12 wheel",
+      "freight": 27000,
+      "per_km": 83.6
+    },
+    {
+      "o": "Malappuram",
+      "d": "Mumbai",
+      "km": 1224.2,
+      "veh": "12 wheel",
+      "freight": 69000,
+      "per_km": 56.4
     },
     {
       "o": "Kalamassery",
