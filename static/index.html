@@ -709,11 +709,13 @@
       }
       hideConfirm();
       renderResult(data);
-      var p = data.parsed || {};
-      saveToHistory({
-        origin: p.origin, destination: p.destination, vehicle_type: p.vehicle_type, material: p.material,
-        total_price_suggested: data.total_price_suggested, price_per_ton: data.price_per_ton,
-      });
+      // History logging paused during the testing week so test runs don't
+      // clutter it -- re-enable this block once testing wraps up.
+      // var p = data.parsed || {};
+      // saveToHistory({
+      //   origin: p.origin, destination: p.destination, vehicle_type: p.vehicle_type, material: p.material,
+      //   total_price_suggested: data.total_price_suggested, price_per_ton: data.price_per_ton,
+      // });
     } catch (e) {
       showError("Couldn't reach the pricing service -- check your connection and try again.");
     } finally {
