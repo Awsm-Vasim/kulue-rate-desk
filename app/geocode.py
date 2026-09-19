@@ -237,6 +237,12 @@ def search_suggestions(q, limit=8):
 
 
 def _typo_candidates(place, n=4):
+    """Gazetteer-based "did you mean" candidates. _fuzzy_correct() falls back
+    to returning its input unchanged when nothing matches well enough --
+    important elsewhere, but here it must NOT be added as a "candidate", or a
+    genuinely unresolvable place ends up "suggesting" itself back verbatim,
+    which masks the case entirely from callers that check "were there any
+    real suggestions?" to decide whether a place is truly unresolvable."""
     seen = set()
     out = []
 
@@ -245,14 +251,18 @@ def _typo_candidates(place, n=4):
             seen.add(name.lower())
             out.append(name)
 
-    add(_fuzzy_correct(place))
+    corrected = _fuzzy_correct(place)
+    if corrected.lower() != place.lower():
+        add(corrected)
     for m in difflib.get_close_matches(place, GAZETTEER, n=n, cutoff=0.6):
         add(m)
 
     if "," in place:
         local = ",".join(p.strip() for p in place.split(",")[:-1] if p.strip())
         if local:
-            add(_fuzzy_correct(local))
+            local_corrected = _fuzzy_correct(local)
+            if local_corrected.lower() != local.lower():
+                add(local_corrected)
             for m in difflib.get_close_matches(local, GAZETTEER, n=n, cutoff=0.6):
                 add(m)
 

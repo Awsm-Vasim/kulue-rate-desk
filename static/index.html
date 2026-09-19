@@ -621,7 +621,7 @@
     els.resTotal.textContent = money(data.total_price_suggested);
     els.resRange.textContent = "Negotiation range: ₹" + money(data.total_price_low) + " – ₹" + money(data.total_price_high);
     els.resPerTon.textContent = data.price_per_ton != null ? money(data.price_per_ton) : "—";
-    els.factKm.textContent = Math.round(data.distance_km) + " km";
+    els.factKm.textContent = data.distance_km != null ? Math.round(data.distance_km) + " km" : "Unknown";
     els.factRate.textContent = "₹" + data.rate_per_km + "/km";
     if (p.vehicle_type) {
       els.factVeh.textContent = p.vehicle_type;

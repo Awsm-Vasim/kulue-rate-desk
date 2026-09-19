@@ -79,6 +79,10 @@ class PricingModel:
 
         rows = [r for r in model_data.get("training_rows", []) if r.get("km", 0) > 0]
         self.n_rows = len(rows)
+        # used only when a place can't be geocoded at all and there's no real
+        # distance to work with -- the median historical trip length is a
+        # far better placeholder than refusing to price the load outright.
+        self.median_km = sorted(r["km"] for r in rows)[len(rows) // 2] if rows else 150.0
 
         residuals = []
         by_vehicle = defaultdict(list)
@@ -174,6 +178,25 @@ class PricingModel:
             "confidence": confidence,
             "confidence_reason": confidence_reason,
         }
+
+    def predict_without_distance(self, vehicle_type=None):
+        """Used when a place couldn't be geocoded at all, so there's no real
+        distance to price against. Rather than refusing to quote, assumes the
+        dataset's median historical trip length as a stand-in -- clearly
+        flagged as a rough, non-route-specific estimate, not a distance
+        calculation for the actual trip."""
+        pred = self.predict("__unresolved__", "__unresolved__", self.median_km, vehicle_type)
+        pred["confidence"] = "low"
+        pred["confidence_reason"] = (
+            "One or both locations couldn't be pinpointed on the map, so this isn't based on the "
+            "actual trip distance -- it assumes a typical historical trip length as a rough stand-in. "
+            "Check the spelling or try a nearby well-known town for a real distance-based price."
+        )
+        pred["basis"] = (
+            f"Rough market-average estimate ({self.n_rows} historical quotes, "
+            f"assumed ~{round(self.median_km)} km since the actual distance is unknown)."
+        )
+        return pred
 
 
 def assess_offered_price(offered_value, offered_unit, pred, weight_tons, distance_km):

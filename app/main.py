@@ -108,31 +108,30 @@ def quote(req: QuoteRequest):
     dist_cache = load_cache("distance_cache.json", seed_name="distance_cache_seed.json")
 
     needs_confirmation = []
+    unresolvable = False
     for field in ("origin", "destination"):
         place = parsed[field]
         if field in overrides:
             # the poster already picked this spelling from a suggestion list --
             # resolve it with full effort and stop asking.
             if not geocode(place, geo_cache):
-                save_cache("geocode_cache.json", geo_cache)
-                raise HTTPException(422, f"Couldn't locate '{place}' on the map -- check the spelling.")
+                unresolvable = True
             continue
         result, suggestions = geocode_or_suggest(place, geo_cache)
         if result is None:
             if suggestions:
                 needs_confirmation.append({"field": field, "raw": place, "suggestions": suggestions})
             else:
-                save_cache("geocode_cache.json", geo_cache)
-                raise HTTPException(422, f"Couldn't locate '{place}' on the map -- check the spelling.")
+                unresolvable = True
 
     save_cache("geocode_cache.json", geo_cache)
     if needs_confirmation:
         return {"needs_confirmation": needs_confirmation, "parsed": parsed}
 
-    km = route_km(parsed["origin"], parsed["destination"], geo_cache, dist_cache)
-    save_cache("distance_cache.json", dist_cache)
-    if km is None:
-        raise HTTPException(422, "Couldn't compute a driving route between these two places.")
+    km = None
+    if not unresolvable:
+        km = route_km(parsed["origin"], parsed["destination"], geo_cache, dist_cache)
+        save_cache("distance_cache.json", dist_cache)
 
     suggested_vehicle_type = None
     if not parsed.get("vehicle_type") and parsed.get("weight_tons"):
@@ -143,7 +142,16 @@ def quote(req: QuoteRequest):
     # a 25-ton load actually runs on a 14-wheeler at 14-wheeler rates, not
     # some blend across mini-trucks and trailers alike.
     pricing_vehicle = parsed.get("vehicle_type") or suggested_vehicle_type
-    pred = pricing_model.predict(parsed["origin"], parsed["destination"], km, pricing_vehicle)
+
+    # A place that can't be pinpointed on the map (or two valid places with
+    # no drivable route between them) used to be a hard error with zero
+    # price. Instead, fall back to a rough market-average estimate -- an
+    # honestly-labeled low-confidence number beats forcing the poster to give
+    # up entirely just because a small village isn't on the map.
+    if km is None:
+        pred = pricing_model.predict_without_distance(pricing_vehicle)
+    else:
+        pred = pricing_model.predict(parsed["origin"], parsed["destination"], km, pricing_vehicle)
     per_ton = round(pred["total"] / parsed["weight_tons"]) if parsed.get("weight_tons") else None
 
     offered_price_check = None
