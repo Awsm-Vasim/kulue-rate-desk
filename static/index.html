@@ -75,6 +75,8 @@
     overflow-y: auto; z-index: 20; }
   .suggest-item { padding: 9px 12px; font-size: 13.5px; cursor: pointer; }
   .suggest-item:hover, .suggest-item.active { background: var(--accent-soft); color: var(--accent-ink); }
+  .suggest-item.suggest-others { border-top: 1px solid var(--line); color: var(--muted); font-style: italic; }
+  .suggest-item.suggest-others:hover, .suggest-item.suggest-others.active { color: var(--accent-ink); }
   .tear { border-top: 1.5px dashed var(--line); margin: 14px 0 0; padding-top: 12px;
     display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .hint { font-size: 12px; color: var(--muted); }
@@ -230,7 +232,8 @@
         </div>
         <div class="form-row">
           <label class="field-label" for="materialInput">Material</label>
-          <input id="materialInput" class="text-input" type="text" placeholder="Optional — e.g. feed">
+          <input id="materialInput" class="text-input" type="text" autocomplete="off" placeholder="Optional — e.g. feed">
+          <div class="suggest-list" id="materialSuggest" hidden></div>
         </div>
         <div class="form-row">
           <label class="field-label" for="weightInput">Weight<span class="required-mark">*</span></label>
@@ -375,6 +378,7 @@
     toSuggest: document.getElementById("toSuggest"),
     vehicleInput: document.getElementById("vehicleInput"),
     materialInput: document.getElementById("materialInput"),
+    materialSuggest: document.getElementById("materialSuggest"),
     weightInput: document.getElementById("weightInput"),
     loadingInput: document.getElementById("loadingInput"),
     offeredInput: document.getElementById("offeredInput"),
@@ -434,7 +438,13 @@
     els.fromInput.focus();
   });
 
-  function setupAutocomplete(inputEl, listEl) {
+  var OTHERS_SENTINEL = "__others__";
+
+  function setupAutocomplete(inputEl, listEl, opts) {
+    opts = opts || {};
+    var endpoint = opts.endpoint || "/api/places";
+    var minLen = opts.minLen != null ? opts.minLen : 3;
+    var showOthers = !!opts.others;
     var debounceTimer = null;
     var items = [];
     var activeIndex = -1;
@@ -452,32 +462,48 @@
     }
 
     function renderList(places) {
-      items = places;
+      items = places.slice();
+      if (showOthers) items.push(OTHERS_SENTINEL);
       activeIndex = -1;
-      if (!places.length) { hideList(); return; }
-      listEl.innerHTML = places.map(function (p, i) {
-        return '<div class="suggest-item" data-idx="' + i + '">' + esc(p) + '</div>';
+      if (!items.length) { hideList(); return; }
+      listEl.innerHTML = items.map(function (p, i) {
+        var isOthers = p === OTHERS_SENTINEL;
+        var label = isOthers ? "Others (type your own)" : p;
+        return '<div class="suggest-item' + (isOthers ? " suggest-others" : "") + '" data-idx="' + i + '">' +
+          esc(label) + '</div>';
       }).join("");
       listEl.hidden = false;
     }
 
     function selectItem(i) {
       if (i < 0 || i >= items.length) return;
+      if (items[i] === OTHERS_SENTINEL) {
+        inputEl.value = "";
+        hideList();
+        inputEl.focus();
+        return;
+      }
       inputEl.value = items[i];
       hideList();
+    }
+
+    function fetchSuggestions(q) {
+      fetch(endpoint + "?q=" + encodeURIComponent(q))
+        .then(function (r) { return r.json(); })
+        .then(function (d) { renderList(d.places || []); })
+        .catch(function () { hideList(); });
     }
 
     inputEl.addEventListener("input", function () {
       var q = inputEl.value.trim();
       if (debounceTimer) clearTimeout(debounceTimer);
-      if (q.length < 3) { hideList(); return; }
-      debounceTimer = setTimeout(function () {
-        fetch("/api/places?q=" + encodeURIComponent(q))
-          .then(function (r) { return r.json(); })
-          .then(function (d) { renderList(d.places || []); })
-          .catch(function () { hideList(); });
-      }, 350);
+      if (q.length < minLen) { hideList(); return; }
+      debounceTimer = setTimeout(function () { fetchSuggestions(q); }, 350);
     });
+
+    if (minLen === 0) {
+      inputEl.addEventListener("focus", function () { fetchSuggestions(inputEl.value.trim()); });
+    }
 
     inputEl.addEventListener("keydown", function (e) {
       if (listEl.hidden) return;
@@ -508,6 +534,7 @@
 
   setupAutocomplete(els.fromInput, els.fromSuggest);
   setupAutocomplete(els.toInput, els.toSuggest);
+  setupAutocomplete(els.materialInput, els.materialSuggest, { endpoint: "/api/materials", minLen: 0, others: true });
 
   var HIST_KEY = "kulue_rate_desk_history";
   function loadHistory() {

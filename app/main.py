@@ -19,7 +19,7 @@ from app.geocode import (
     save_cache,
     search_suggestions,
 )
-from app.parser import parse_post
+from app.parser import MATERIALS, parse_post
 from app.pricing import PricingModel, assess_offered_price, suggest_vehicle_type
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -37,6 +37,19 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
+
+
+@app.middleware("http")
+async def no_cache_static(request, call_next):
+    """This app ships as a single-page static bundle that gets redeployed
+    often -- without this, a phone's browser can keep serving yesterday's
+    cached index.html indefinitely, so two devices can show genuinely
+    different prices simply because one of them is running stale client
+    code against the current API, not because the pricing itself differs."""
+    response = await call_next(request)
+    if request.url.path == "/" or request.url.path.endswith(".html"):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return response
 
 # A WhatsApp load post is never anywhere near this long -- capping input
 # length keeps a stray paste (or a deliberately huge request) from being
@@ -83,6 +96,20 @@ def places(q: str = ""):
             if f not in results:
                 results.append(f)
     return {"places": results[:8]}
+
+
+@app.get("/api/materials")
+def materials(q: str = ""):
+    """Same response shape as /api/places ("places" key) so the frontend
+    can reuse one autocomplete implementation for both fields -- this is a
+    small local list, not an external geocoder, so it's cheap to return
+    matches (or the whole list) even for a short/empty query."""
+    q = q.strip()[:200].lower()
+    if not q:
+        return {"places": MATERIALS[:8]}
+    starts = [m for m in MATERIALS if m.lower().startswith(q)]
+    contains = [m for m in MATERIALS if q in m.lower() and m not in starts]
+    return {"places": (starts + contains)[:8]}
 
 
 @app.get("/api/corridors")
