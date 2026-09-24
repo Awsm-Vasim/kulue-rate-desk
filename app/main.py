@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from app import db
 from app.geocode import (
     GAZETTEER,
     geocode,
@@ -30,20 +31,27 @@ STATIC_DIR = os.path.join(BASE_DIR, "static")
 
 
 def _build_pricing_model():
-    """Loads the trained model data and resolves each known corridor's
-    endpoints to coordinates -- PricingModel matches corridors by resolved
+    """Loads the trained model data -- from Postgres if DATABASE_URL is
+    configured (see scripts/migrate_json_to_postgres.py), else from
+    data/training_rows.json unchanged -- and resolves each known corridor's
+    endpoints to coordinates. PricingModel matches corridors by resolved
     coordinates, not by the raw place-name string a device happened to send,
     so 'Aluva' and an autocomplete-picked 'Aluva, Ernakulam, Kerala' hit the
     same corridor. A corridor whose endpoints fail to geocode is silently
     dropped from exact-corridor matching (still contributes to the generic
     distance curve via training_rows)."""
-    with open(os.path.join(DATA_DIR, "training_rows.json")) as f:
-        model_data = json.load(f)
+    if db.enabled():
+        model_data = db.load_pricing_model_data()
+    else:
+        with open(os.path.join(DATA_DIR, "training_rows.json")) as f:
+            model_data = json.load(f)
 
     geo_cache = load_cache("geocode_cache.json", seed_name="geocode_cache_seed.json")
     for corridor in model_data.get("known_corridors", []):
-        corridor["a_coords"] = geocode(corridor["a"], geo_cache)
-        corridor["b_coords"] = geocode(corridor["b"], geo_cache)
+        if not corridor.get("a_coords"):
+            corridor["a_coords"] = geocode(corridor["a"], geo_cache)
+        if not corridor.get("b_coords"):
+            corridor["b_coords"] = geocode(corridor["b"], geo_cache)
     save_cache("geocode_cache.json", geo_cache)
 
     return PricingModel(model_data)
@@ -241,6 +249,10 @@ def feedback(req: FeedbackRequest):
     manual_quotes.json (see the whatsapp-load-report pipeline's --add-quote)
     -- not auto-trained on directly, since a raw comment needs a human to
     turn it into a real route/vehicle/freight data point."""
+    if db.enabled():
+        db.insert_feedback(req.accurate, (req.comment or "").strip() or None, req.quote)
+        return {"ok": True}
+
     lock_path = FEEDBACK_PATH + ".lock"
     with open(lock_path, "a+") as lockf:
         fcntl.flock(lockf, fcntl.LOCK_EX)

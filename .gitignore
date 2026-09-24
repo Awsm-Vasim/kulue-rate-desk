@@ -4,6 +4,9 @@ __pycache__/
 venv/
 .DS_Store
 
+# local Neon connection string -- never commit real credentials
+.env
+
 # runtime-grown caches (seed files ARE committed; these are what the server
 # writes to at runtime and can just regrow from the seed on next deploy)
 data/geocode_cache.json

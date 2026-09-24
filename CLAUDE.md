@@ -27,6 +27,24 @@ Then open:
 http://127.0.0.1:8000
 ```
 
+## Database
+Runtime geocode/distance caches, feedback, and the trained pricing data live
+in Postgres (free-tier Neon) once `DATABASE_URL` is set — see `app/db.py`.
+Without it, the app falls back to the original `data/*.json` files
+unchanged, so local dev works before Neon is set up.
+
+One-time local setup, once you have a Neon project (see `app/db.py`'s
+docstring / the project's data-migration plan for provisioning steps):
+```bash
+cp .env.example .env   # fill in your Neon "dev" branch's pooled connection string
+python3 scripts/init_db.py                    # applies scripts/init_db.sql (idempotent)
+python3 scripts/migrate_json_to_postgres.py   # imports data/*.json into it
+```
+Refreshing `data/training_rows.json` from the WhatsApp report pipeline now
+requires re-running `scripts/migrate_json_to_postgres.py` against the target
+Neon branch — a redeploy alone no longer picks up new training data once
+`DATABASE_URL` is set.
+
 ## Health check
 ```bash
 curl -s http://127.0.0.1:8000/api/health

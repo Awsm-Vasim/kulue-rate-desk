@@ -32,6 +32,8 @@ import urllib.request
 
 import certifi
 
+from app import db
+
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 UA = "kulue-rate-desk/1.0 (internal tool; contact: ops@kulue.example)"
 _SSL_CTX = ssl.create_default_context(cafile=certifi.where())
@@ -69,7 +71,20 @@ def get_cached_coords(place, cache):
     return cache.get(normalize_place_key(place))
 
 
+_DB_CACHE_FACTORIES = {
+    "geocode_cache.json": db.geocode_db_cache,
+    "distance_cache.json": db.distance_db_cache,
+}
+
+
 def load_cache(name, seed_name=None):
+    """Returns a Postgres-backed DBCache (reads/writes go straight to the DB,
+    durable across restarts) when DATABASE_URL is configured; otherwise falls
+    back to the original JSON-file behavior unchanged, so the app still runs
+    before Neon is set up."""
+    if db.enabled() and name in _DB_CACHE_FACTORIES:
+        return _DB_CACHE_FACTORIES[name]()
+
     path = _cache_path(name)
     if os.path.exists(path):
         with open(path) as f:
@@ -91,7 +106,13 @@ def save_cache(name, data):
     new place, and save -- the second save's whole-file write clobbers the
     first request's new entry. Locking the read-merge-write cycle (and
     merging rather than replacing) means concurrent requests each contribute
-    their new keys instead of racing to overwrite one another."""
+    their new keys instead of racing to overwrite one another.
+
+    No-op when `data` is a DBCache -- its __setitem__ already wrote each
+    entry straight to Postgres as it was set."""
+    if isinstance(data, db.DBCache):
+        return
+
     path = _cache_path(name)
     lock_path = path + ".lock"
     with open(lock_path, "a+") as lockf:
