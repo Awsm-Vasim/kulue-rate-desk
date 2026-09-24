@@ -20,6 +20,10 @@ from collections import defaultdict
 
 MIN_CORRIDOR_N = 2
 MIN_VEHICLE_SAMPLES = 3
+COORD_GRID_PRECISION = 2  # ~1.1km grid at the equator -- coarse enough that
+# the same real place still lands on the same key across independent geocode
+# calls (which can differ by a few meters), fine enough that two distinct
+# towns never collide.
 
 
 def _normalize_vehicle(s):
@@ -69,7 +73,17 @@ def suggest_vehicle_type(weight_tons):
 class PricingModel:
     def __init__(self, model_data):
         self.known_corridors = model_data.get("known_corridors", [])
-        self._known_by_key = {self._key(c["a"], c["b"]): c for c in self.known_corridors}
+        # Corridors are matched by resolved coordinates, not by the raw place
+        # string a poster's device happened to send -- see _key(). A corridor
+        # without both endpoints' coordinates (geocoding failed for it) can't
+        # be matched this way and is silently excluded from exact-corridor
+        # pricing; it still contributes to the generic distance-bucket curve
+        # via training_rows.
+        self._known_by_key = {
+            self._key(c["a_coords"], c["b_coords"]): c
+            for c in self.known_corridors
+            if c.get("a_coords") and c.get("b_coords")
+        }
 
         self.buckets = sorted(
             (float(k), v) for k, v in model_data.get("bucket_avg_per_km", {}).items()
@@ -106,8 +120,21 @@ class PricingModel:
         }
 
     @staticmethod
-    def _key(a, b):
-        return tuple(sorted([a.strip().lower(), b.strip().lower()]))
+    def _key(a_coords, b_coords):
+        """Coordinate-based corridor key, rounded to a coarse grid. Using
+        resolved coordinates instead of the raw place string means 'Aluva'
+        and the autocomplete-picked 'Aluva, Ernakulam, Kerala' -- or any
+        casing/whitespace variant -- always match the same corridor, since
+        they resolve to the same point on the map. A bare-string key (the
+        previous approach) let two devices posting the identical real route
+        with cosmetically different text silently take different pricing
+        paths -- one hitting the real historical corridor, the other falling
+        through to a generic distance estimate."""
+        if not a_coords or not b_coords:
+            return None
+        a = (round(a_coords[0], COORD_GRID_PRECISION), round(a_coords[1], COORD_GRID_PRECISION))
+        b = (round(b_coords[0], COORD_GRID_PRECISION), round(b_coords[1], COORD_GRID_PRECISION))
+        return tuple(sorted([a, b]))
 
     def _bucket_rate(self, km):
         buckets = self.buckets
@@ -123,8 +150,8 @@ class PricingModel:
                 return v0 + t * (v1 - v0)
         return buckets[-1][1]
 
-    def predict(self, origin, destination, distance_km, vehicle_type=None):
-        corridor = self._known_by_key.get(self._key(origin, destination))
+    def predict(self, origin_coords, destination_coords, distance_km, vehicle_type=None):
+        corridor = self._known_by_key.get(self._key(origin_coords, destination_coords))
         if corridor and corridor["n"] >= MIN_CORRIDOR_N:
             rate = corridor["median_per_km"]
             total = round(distance_km * rate)
@@ -185,7 +212,7 @@ class PricingModel:
         dataset's median historical trip length as a stand-in -- clearly
         flagged as a rough, non-route-specific estimate, not a distance
         calculation for the actual trip."""
-        pred = self.predict("__unresolved__", "__unresolved__", self.median_km, vehicle_type)
+        pred = self.predict(None, None, self.median_km, vehicle_type)
         pred["confidence"] = "low"
         pred["confidence_reason"] = (
             "One or both locations couldn't be pinpointed on the map, so this isn't based on the "

@@ -14,7 +14,9 @@ from app.geocode import (
     GAZETTEER,
     geocode,
     geocode_or_suggest,
+    get_cached_coords,
     load_cache,
+    normalize_place_key,
     route_km,
     save_cache,
     search_suggestions,
@@ -26,9 +28,28 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 
-with open(os.path.join(DATA_DIR, "training_rows.json")) as f:
-    MODEL_DATA = json.load(f)
-pricing_model = PricingModel(MODEL_DATA)
+
+def _build_pricing_model():
+    """Loads the trained model data and resolves each known corridor's
+    endpoints to coordinates -- PricingModel matches corridors by resolved
+    coordinates, not by the raw place-name string a device happened to send,
+    so 'Aluva' and an autocomplete-picked 'Aluva, Ernakulam, Kerala' hit the
+    same corridor. A corridor whose endpoints fail to geocode is silently
+    dropped from exact-corridor matching (still contributes to the generic
+    distance curve via training_rows)."""
+    with open(os.path.join(DATA_DIR, "training_rows.json")) as f:
+        model_data = json.load(f)
+
+    geo_cache = load_cache("geocode_cache.json", seed_name="geocode_cache_seed.json")
+    for corridor in model_data.get("known_corridors", []):
+        corridor["a_coords"] = geocode(corridor["a"], geo_cache)
+        corridor["b_coords"] = geocode(corridor["b"], geo_cache)
+    save_cache("geocode_cache.json", geo_cache)
+
+    return PricingModel(model_data)
+
+
+pricing_model = _build_pricing_model()
 
 app = FastAPI(title="Kulue Rate Calculator")
 app.add_middleware(
@@ -128,7 +149,7 @@ def quote(req: QuoteRequest):
     parsed["origin"] = overrides.get("origin") or parsed["origin"]
     parsed["destination"] = overrides.get("destination") or parsed["destination"]
 
-    if parsed["origin"].strip().lower() == parsed["destination"].strip().lower():
+    if normalize_place_key(parsed["origin"]) == normalize_place_key(parsed["destination"]):
         raise HTTPException(400, "Origin and destination can't be the same place.")
 
     geo_cache = load_cache("geocode_cache.json", seed_name="geocode_cache_seed.json")
@@ -178,7 +199,12 @@ def quote(req: QuoteRequest):
     if km is None:
         pred = pricing_model.predict_without_distance(pricing_vehicle)
     else:
-        pred = pricing_model.predict(parsed["origin"], parsed["destination"], km, pricing_vehicle)
+        # Matched by resolved coordinates, not the raw origin/destination
+        # strings -- route_km() above already required both to be in
+        # geo_cache, so these lookups are guaranteed to hit.
+        origin_coords = get_cached_coords(parsed["origin"], geo_cache)
+        destination_coords = get_cached_coords(parsed["destination"], geo_cache)
+        pred = pricing_model.predict(origin_coords, destination_coords, km, pricing_vehicle)
     per_ton = round(pred["total"] / parsed["weight_tons"]) if parsed.get("weight_tons") else None
 
     offered_price_check = None

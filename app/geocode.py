@@ -24,6 +24,7 @@ import difflib
 import fcntl
 import json
 import os
+import re
 import ssl
 import time
 import urllib.parse
@@ -54,6 +55,18 @@ def _get_json(url, timeout=10):
 
 def _cache_path(name):
     return os.path.join(DATA_DIR, name)
+
+
+def normalize_place_key(s):
+    """Casefolds and collapses whitespace so 'Chennai', 'chennai ', and
+    '  CHENNAI' all land on the same geocode/distance cache entry instead of
+    each triggering its own network lookup (and potentially resolving to a
+    slightly different coordinate each time)."""
+    return re.sub(r'\s+', ' ', s.strip().lower())
+
+
+def get_cached_coords(place, cache):
+    return cache.get(normalize_place_key(place))
 
 
 def load_cache(name, seed_name=None):
@@ -137,12 +150,15 @@ def _viewbox_around(lat, lon, deg=0.6):
 
 def geocode(place, cache):
     """Resolves a place name to [lat, lon], trying a few strategies. Cached by
-    the exact raw string so repeat lookups (even ones that needed fallback
-    strategies) are free after the first."""
-    if place in cache:
-        return cache[place]
+    a normalized (casefolded, whitespace-collapsed) key so repeat lookups
+    (even ones that needed fallback strategies) are free after the first, and
+    'Chennai' / 'chennai ' / '  CHENNAI' all share one cache entry instead of
+    each hitting the network and potentially resolving to a different point."""
+    key = normalize_place_key(place)
+    if key in cache:
+        return cache[key]
     result = _resolve(place, cache)
-    cache[place] = result
+    cache[key] = result
     return result
 
 
@@ -278,12 +294,13 @@ def geocode_or_suggest(place, cache):
         to pick one of these known place names instead of guessing.
       - coords None, suggestions []   -> genuinely couldn't locate it.
     """
-    if place in cache:
-        return cache[place], None
+    key = normalize_place_key(place)
+    if key in cache:
+        return cache[key], None
 
     result = _search(f"{place}, India")
     if result:
-        cache[place] = result
+        cache[key] = result
         return result, None
 
     # "local, anchor" compound (e.g. "Begur, Mysuru") -- resolving the local
@@ -297,17 +314,17 @@ def geocode_or_suggest(place, cache):
             if anchor_coords:
                 result = _search(local, viewbox=_viewbox_around(*anchor_coords))
                 if result:
-                    cache[place] = result
+                    cache[key] = result
                     return result, None
 
     return None, _typo_candidates(place)
 
 
 def route_km(origin, destination, geo_cache, dist_cache):
-    key = " | ".join(sorted([origin, destination]))
+    key = " | ".join(sorted([normalize_place_key(origin), normalize_place_key(destination)]))
     if key in dist_cache:
         return dist_cache[key]
-    go, gd = geo_cache.get(origin), geo_cache.get(destination)
+    go, gd = get_cached_coords(origin, geo_cache), get_cached_coords(destination, geo_cache)
     if not go or not gd:
         dist_cache[key] = None
         return None
