@@ -15,9 +15,18 @@ CREATE TABLE IF NOT EXISTS corridors (
     median_per_km DOUBLE PRECISION NOT NULL,
     min_freight NUMERIC,
     max_freight NUMERIC,
+    p10_freight NUMERIC,
+    p90_freight NUMERIC,
+    vehicle_freight_stats JSONB,
     vehicles JSONB,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- One-time upgrade path for a corridors table created before these columns
+-- existed; ADD COLUMN IF NOT EXISTS is itself idempotent so no guard needed.
+ALTER TABLE corridors ADD COLUMN IF NOT EXISTS p10_freight NUMERIC;
+ALTER TABLE corridors ADD COLUMN IF NOT EXISTS p90_freight NUMERIC;
+ALTER TABLE corridors ADD COLUMN IF NOT EXISTS vehicle_freight_stats JSONB;
 
 CREATE TABLE IF NOT EXISTS training_rows (
     id SERIAL PRIMARY KEY,

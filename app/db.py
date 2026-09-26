@@ -171,7 +171,8 @@ def load_pricing_model_data():
         corridors = conn.execute(
             "SELECT origin_name, destination_name, origin_lat, origin_lon, "
             "destination_lat, destination_lon, n, median_per_km, min_freight, "
-            "max_freight, vehicles FROM corridors"
+            "max_freight, p10_freight, p90_freight, vehicle_freight_stats, vehicles "
+            "FROM corridors"
         ).fetchall()
         rows = conn.execute(
             "SELECT origin_raw, destination_raw, distance_km, vehicle_type, "
@@ -186,7 +187,8 @@ def load_pricing_model_data():
         ).fetchone()
 
     known_corridors = []
-    for (o, d, o_lat, o_lon, d_lat, d_lon, n, median_per_km, min_f, max_f, vehicles) in corridors:
+    for (o, d, o_lat, o_lon, d_lat, d_lon, n, median_per_km, min_f, max_f,
+         p10_f, p90_f, vehicle_freight_stats, vehicles) in corridors:
         known_corridors.append({
             "a": o, "b": d,
             "a_coords": [o_lat, o_lon] if o_lat is not None else None,
@@ -194,6 +196,9 @@ def load_pricing_model_data():
             "n": n, "median_per_km": median_per_km,
             "min_freight": float(min_f) if min_f is not None else None,
             "max_freight": float(max_f) if max_f is not None else None,
+            "p10_freight": float(p10_f) if p10_f is not None else None,
+            "p90_freight": float(p90_f) if p90_f is not None else None,
+            "vehicle_freight_stats": vehicle_freight_stats or {},
             "vehicles": vehicles,
         })
 

@@ -107,7 +107,9 @@ def migrate_corridors(conn, model_data, geo_cache):
         to_insert.append((
             c["a"], c["b"], a_coords[0], a_coords[1], b_coords[0], b_coords[1],
             _corridor_pair_key(a_coords, b_coords), c["n"], c["median_per_km"],
-            c.get("min_freight"), c.get("max_freight"), json.dumps(c.get("vehicles")),
+            c.get("min_freight"), c.get("max_freight"),
+            c.get("p10_freight"), c.get("p90_freight"),
+            json.dumps(c.get("vehicle_freight_stats")), json.dumps(c.get("vehicles")),
         ))
 
     if to_insert:
@@ -116,11 +118,14 @@ def migrate_corridors(conn, model_data, geo_cache):
                 """INSERT INTO corridors
                        (origin_name, destination_name, origin_lat, origin_lon,
                         destination_lat, destination_lon, pair_key, n, median_per_km,
-                        min_freight, max_freight, vehicles)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        min_freight, max_freight, p10_freight, p90_freight,
+                        vehicle_freight_stats, vehicles)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                    ON CONFLICT (pair_key) DO UPDATE SET
                        n = EXCLUDED.n, median_per_km = EXCLUDED.median_per_km,
                        min_freight = EXCLUDED.min_freight, max_freight = EXCLUDED.max_freight,
+                       p10_freight = EXCLUDED.p10_freight, p90_freight = EXCLUDED.p90_freight,
+                       vehicle_freight_stats = EXCLUDED.vehicle_freight_stats,
                        vehicles = EXCLUDED.vehicles, updated_at = now()""",
                 to_insert,
             )

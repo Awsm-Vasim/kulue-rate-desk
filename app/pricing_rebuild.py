@@ -16,7 +16,13 @@ from datetime import datetime
 
 from app import db
 from app.geocode import geocode, normalize_place_key, route_km
+from app.pricing import _normalize_vehicle
 from scripts.migrate_json_to_postgres import migrate_corridors, migrate_training_data
+
+# Minimum quotes for a specific vehicle type on one corridor before its own
+# price band is trusted over the corridor-wide one -- below this a single
+# oddly-priced post could swing the whole band.
+MIN_VEHICLE_SAMPLES_FOR_BAND = 3
 
 # Same bounds run_report.py uses to exclude a mislabeled per-ton rate (too
 # low) or a bulk-post's price mismatched to the wrong short-hop pair of
@@ -92,17 +98,46 @@ def rebuild():
     if not rows:
         return {"priced_quotes": 0, "known_corridors": 0}
 
+    def _percentile(sorted_vals, p):
+        idx = min(len(sorted_vals) - 1, max(0, int(len(sorted_vals) * p)))
+        return sorted_vals[idx]
+
     by_corridor = defaultdict(list)
     for r in rows:
         by_corridor[tuple(sorted([r["o"], r["d"]]))].append(r)
     known_corridors = []
     for (a, b), qs in by_corridor.items():
-        freights = [q["freight"] for q in qs]
+        freights = sorted(q["freight"] for q in qs)
         per_kms = [q["per_km"] for q in qs]
+
+        # Real quote-to-quote negotiation spread on one route is far tighter
+        # than the raw min/max -- min/max mixes every vehicle type ever
+        # posted on this lane (a 17ft and a 22ft truck genuinely cost
+        # different amounts), which made the shown range look artificially
+        # huge. p10/p90 of the pooled freights trims that outlier/mixed-
+        # vehicle influence; a per-vehicle band (below) does even better
+        # when the poster names a vehicle type.
+        by_vehicle = defaultdict(list)
+        for q in qs:
+            by_vehicle[_normalize_vehicle(q["veh"])].append(q["freight"])
+        vehicle_freight_stats = {}
+        for veh_key, vals in by_vehicle.items():
+            if len(vals) >= MIN_VEHICLE_SAMPLES_FOR_BAND:
+                vals_sorted = sorted(vals)
+                vehicle_freight_stats[veh_key] = {
+                    "n": len(vals_sorted),
+                    "median": round(statistics.median(vals_sorted)),
+                    "p10": _percentile(vals_sorted, 0.10),
+                    "p90": _percentile(vals_sorted, 0.90),
+                }
+
         known_corridors.append({
             "a": a, "b": b, "n": len(qs),
             "median_per_km": round(statistics.median(per_kms), 1),
             "min_freight": min(freights), "max_freight": max(freights),
+            "p10_freight": _percentile(freights, 0.10),
+            "p90_freight": _percentile(freights, 0.90),
+            "vehicle_freight_stats": vehicle_freight_stats,
             "vehicles": sorted(set(q["veh"] for q in qs)),
         })
     known_corridors.sort(key=lambda x: -x["n"])

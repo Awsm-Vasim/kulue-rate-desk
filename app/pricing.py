@@ -156,13 +156,32 @@ class PricingModel:
             rate = corridor["median_per_km"]
             total = round(distance_km * rate)
             confidence = "high" if corridor["n"] >= 5 else "medium"
+
+            # A route's raw min/max mixes every vehicle type ever posted on
+            # it (a 17ft and a 22ft truck genuinely cost different amounts),
+            # which made the shown range far wider than what a poster
+            # actually sees when negotiating one specific vehicle. When the
+            # vehicle is named and well-sampled on this corridor, use that
+            # vehicle's own historical band instead of the whole-corridor one.
+            veh_stats = None
+            if vehicle_type:
+                veh_stats = (corridor.get("vehicle_freight_stats") or {}).get(_normalize_vehicle(vehicle_type))
+
+            if veh_stats:
+                low, high = veh_stats["p10"], veh_stats["p90"]
+                basis_note = f", {veh_stats['n']} quotes for this vehicle type"
+            else:
+                low = corridor.get("p10_freight", corridor["min_freight"])
+                high = corridor.get("p90_freight", corridor["max_freight"])
+                basis_note = ""
+
             return {
                 "rate_per_km": rate,
                 "total": total,
-                "total_low": min(corridor["min_freight"], total),
-                "total_high": max(corridor["max_freight"], total),
+                "total_low": round(min(low, total)),
+                "total_high": round(max(high, total)),
                 "basis": (f"Matched known corridor {corridor['a']} ↔ {corridor['b']} "
-                          f"({corridor['n']} historical WhatsApp quotes, median ₹{rate}/km)."),
+                          f"({corridor['n']} historical WhatsApp quotes, median ₹{rate}/km{basis_note})."),
                 "confidence": confidence,
                 "confidence_reason": f"Based on {corridor['n']} real historical quotes for this exact corridor.",
             }
