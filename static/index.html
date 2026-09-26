@@ -151,6 +151,18 @@
   .offer-col .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
   .offer-col .v { font-family: "IBM Plex Mono", monospace; font-size: 16px; font-weight: 600; margin-top: 2px; }
   .offer-col .sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  /* TRAINING-PHASE ONLY -- delete this block before publishing to the public. */
+  .training-progress { background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px 16px; margin-bottom: 14px; }
+  .tp-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .tp-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .tp-pct { font-family: "IBM Plex Mono", monospace; font-size: 16px; font-weight: 700; color: var(--accent-ink); }
+  .tp-bar { margin-top: 8px; height: 8px; border-radius: 999px; background: var(--accent-soft); overflow: hidden; }
+  .tp-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent-2), var(--accent));
+    border-radius: 999px; transition: width .5s ease; }
+  .tp-sub { margin-top: 6px; font-size: 11.5px; color: var(--muted); }
+  /* END TRAINING-PHASE ONLY */
+
   .fact-grid { margin-top: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
   .fact .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
   .fact .v { font-family: "IBM Plex Mono", monospace; font-size: 14px; margin-top: 2px; }
@@ -202,6 +214,20 @@
       <div class="tagline">Paste a load post, get a driver-ready price</div>
     </div>
   </header>
+
+  <!-- TRAINING-PHASE ONLY -- delete this whole block (and its matching CSS
+       above and JS below, each marked the same way) before publishing to
+       the public. It's a build-progress instrument for the team, not a
+       feature for end users. -->
+  <section class="training-progress" id="trainingProgress" hidden>
+    <div class="tp-head">
+      <span class="tp-label">Training progress</span>
+      <span class="tp-pct" id="tpPct">—</span>
+    </div>
+    <div class="tp-bar"><div class="tp-fill" id="tpFill"></div></div>
+    <div class="tp-sub" id="tpSub"></div>
+  </section>
+  <!-- END TRAINING-PHASE ONLY -->
 
   <div class="tab-bar">
     <button type="button" class="tab-btn active" data-tab="calculator">Calculator</button>
@@ -588,6 +614,20 @@
   fetch("/api/corridors").then(function (r) { return r.json(); }).then(function (d) {
     renderTeaser(d.corridors || []);
   }).catch(function () {});
+
+  // TRAINING-PHASE ONLY -- delete this block before publishing to the
+  // public (see the matching HTML/CSS blocks, marked the same way).
+  fetch("/api/training-progress").then(function (r) { return r.json(); }).then(function (d) {
+    var tp = document.getElementById("trainingProgress");
+    document.getElementById("tpPct").textContent = d.percent + "%";
+    document.getElementById("tpFill").style.width = d.percent + "%";
+    document.getElementById("tpSub").textContent =
+      d.well_sampled_corridors + " of " + d.target_corridors + " target corridors have " +
+      d.target_min_quotes + "+ verified quotes · " + d.total_quotes + " quotes across " +
+      d.total_corridors + " corridors total";
+    tp.hidden = false;
+  }).catch(function () {});
+  // END TRAINING-PHASE ONLY
 
   function setLoading(on) {
     els.calcBtn.disabled = on;

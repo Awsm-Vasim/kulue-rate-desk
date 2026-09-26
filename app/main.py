@@ -104,6 +104,31 @@ def health():
     return {"ok": True, "training_rows": pricing_model.n_rows, "known_corridors": len(pricing_model.known_corridors)}
 
 
+# Dev-only progress indicator, tracked against the data roadmap's own Phase 1
+# target ("100+ corridors with 10+ quotes" = a regionally trustworthy rate
+# authority, not a national one -- see the project's data-strategy plan).
+# Remove this endpoint (and the matching #trainingProgress block in
+# static/index.html) before a public launch -- it's a training-phase
+# instrument, not a feature for end users.
+TRAINING_TARGET_CORRIDORS = 100
+TRAINING_TARGET_MIN_N = 10
+
+
+@app.get("/api/training-progress")
+def training_progress():
+    corridors = pricing_model.known_corridors
+    well_sampled = sum(1 for c in corridors if c["n"] >= TRAINING_TARGET_MIN_N)
+    pct = min(100, round(100 * well_sampled / TRAINING_TARGET_CORRIDORS))
+    return {
+        "percent": pct,
+        "well_sampled_corridors": well_sampled,
+        "target_corridors": TRAINING_TARGET_CORRIDORS,
+        "target_min_quotes": TRAINING_TARGET_MIN_N,
+        "total_corridors": len(corridors),
+        "total_quotes": pricing_model.n_rows,
+    }
+
+
 @app.get("/api/places")
 def places(q: str = ""):
     q = q.strip()[:200]
