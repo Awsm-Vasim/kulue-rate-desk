@@ -29,7 +29,15 @@ def get_pool():
     global _pool
     if _pool is None:
         from psycopg_pool import ConnectionPool
-        _pool = ConnectionPool(DATABASE_URL, min_size=1, max_size=5, open=True)
+        # autocommit -- nothing here needs multi-statement transactional
+        # atomicity (every write is its own idempotent upsert), and without
+        # it a connection can be left sitting "idle in transaction" after a
+        # bare read if the caller doesn't explicitly commit, which can stall
+        # later queries against the same rows.
+        _pool = ConnectionPool(
+            DATABASE_URL, min_size=1, max_size=5, open=True,
+            kwargs={"autocommit": True},
+        )
     return _pool
 
 
@@ -48,19 +56,32 @@ class DBCache:
         self.value_cols = value_cols
         self._decode = decode
         self._encode = encode
+        # Every caller in this codebase does `if key in cache: return
+        # cache[key]` (geocode(), route_km()) -- without this, that's two
+        # round-trips per lookup. Each round-trip against Neon's pooled
+        # endpoint costs ~1-1.5s (connection/proxy overhead, not query time),
+        # so for a few hundred lookups this alone roughly doubles a rebuild's
+        # runtime. One-entry memoization turns the immediately-following
+        # __getitem__/get() after a __contains__ check into a free hit.
+        self._last_key = None
+        self._last_row = None
+
+    def _fetch(self, key):
+        if key == self._last_key:
+            return self._last_row
+        cols = ", ".join(self.value_cols)
+        sql = f"SELECT {cols} FROM {self.table} WHERE {self.key_col} = %s"
+        with get_pool().connection() as conn:
+            row = conn.execute(sql, (key,)).fetchone()
+        self._last_key = key
+        self._last_row = row
+        return row
 
     def __contains__(self, key):
-        cols = ", ".join(self.value_cols)
-        sql = f"SELECT {cols} FROM {self.table} WHERE {self.key_col} = %s"
-        with get_pool().connection() as conn:
-            row = conn.execute(sql, (key,)).fetchone()
-        return row is not None
+        return self._fetch(key) is not None
 
     def get(self, key, default=None):
-        cols = ", ".join(self.value_cols)
-        sql = f"SELECT {cols} FROM {self.table} WHERE {self.key_col} = %s"
-        with get_pool().connection() as conn:
-            row = conn.execute(sql, (key,)).fetchone()
+        row = self._fetch(key)
         if row is None:
             return default
         return self._decode(row)
@@ -78,6 +99,8 @@ class DBCache:
         )
         with get_pool().connection() as conn:
             conn.execute(sql, (key, *self._encode(value)))
+        if key == self._last_key:
+            self._last_key = None  # invalidate the memoized read
 
     def update(self, other):
         for k, v in other.items():

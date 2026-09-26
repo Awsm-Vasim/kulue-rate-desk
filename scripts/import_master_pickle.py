@@ -78,7 +78,7 @@ def main():
                     """INSERT INTO messages (group_raw, group_key, dt, text, batch_id,
                                               route_origin, route_dest, freight, vehicle_type, material)
                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                       ON CONFLICT (group_key, dt, text) DO NOTHING""",
+                       ON CONFLICT (group_key, dt, md5(text)) DO NOTHING""",
                     rows[i:i + CHUNK],
                 )
                 print(f"  ... {min(i + CHUNK, len(rows))}/{len(rows)}")

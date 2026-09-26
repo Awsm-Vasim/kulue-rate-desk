@@ -15,7 +15,7 @@ from collections import defaultdict
 from datetime import datetime
 
 from app import db
-from app.geocode import geocode, route_km
+from app.geocode import geocode, normalize_place_key, route_km
 from scripts.migrate_json_to_postgres import migrate_corridors, migrate_training_data
 
 # Same bounds run_report.py uses to exclude a mislabeled per-ton rate (too
@@ -39,26 +39,47 @@ def _fetch_priced_messages(conn):
 def rebuild():
     """Returns {"priced_quotes": n, "known_corridors": n}. No-ops (returns
     zeros) if there isn't yet enough data to build anything."""
-    geo_cache = db.geocode_db_cache()
-    dist_cache = db.distance_db_cache()
-
+    print("rebuild: fetching priced messages...", flush=True)
     with db.get_pool().connection() as conn:
         priced = _fetch_priced_messages(conn)
+    print(f"rebuild: {len(priced)} priced messages", flush=True)
 
     if not priced:
         return {"priced_quotes": 0, "known_corridors": 0}
 
+    # Only DISTINCT places/pairs go through the network-bound, per-key
+    # DBCache adapter (one round-trip per lookup) -- bounded by how many
+    # unique places/routes exist, not by how many historical messages there
+    # are. Once resolved, everything downstream reads from plain local
+    # dicts (bulk-loaded once below) so a loop over thousands of raw
+    # messages never does a network round-trip per message.
+    geo_cache = db.geocode_db_cache()
+    dist_cache = db.distance_db_cache()
     pairs = sorted(set((o, d) for o, d, _, _ in priced))
     places = sorted({p for pair in pairs for p in pair})
+    print(f"rebuild: resolving {len(places)} places, {len(pairs)} pairs (rate-limited)...", flush=True)
     for p in places:
         geocode(p, geo_cache)
     for o, d in pairs:
         route_km(o, d, geo_cache, dist_cache)
+    print("rebuild: place/route resolution done", flush=True)
+
+    with db.get_pool().connection() as conn:
+        local_geo = {
+            row[0]: ([row[1], row[2]] if row[3] else None)
+            for row in conn.execute("SELECT place_key, lat, lon, resolved FROM geocode_cache").fetchall()
+        }
+        local_dist = {
+            row[0]: row[1]
+            for row in conn.execute("SELECT pair_key, distance_km FROM distance_cache").fetchall()
+        }
 
     rows = []
     for o, d, freight, veh in priced:
-        key = " | ".join(sorted([o, d]))
-        km = dist_cache.get(key)
+        # Must match route_km()'s own key exactly (app/geocode.py) --
+        # normalized (casefolded) place names, sorted, then joined.
+        key = " | ".join(sorted([normalize_place_key(o), normalize_place_key(d)]))
+        km = local_dist.get(key)
         if km is None or km < 5:
             continue
         per_km = round(float(freight) / km, 1)
@@ -112,11 +133,14 @@ def rebuild():
         "notes": "Rebuilt from live WhatsApp uploads via the admin dashboard.",
     }
 
+    print(f"rebuild: writing {len(rows)} rows / {len(known_corridors)} corridors...", flush=True)
     with db.get_pool().connection() as conn:
         migrate_training_data(conn, model_data)
-        migrate_corridors(conn, model_data, geo_cache)
+        migrate_corridors(conn, model_data, local_geo)  # already-resolved, plain dict -- no network calls
+    print("rebuild: write done, reloading pricing model...", flush=True)
 
     import app.main as main_module
     main_module.pricing_model = main_module._build_pricing_model()
+    print("rebuild: done", flush=True)
 
     return {"priced_quotes": len(rows), "known_corridors": len(known_corridors)}

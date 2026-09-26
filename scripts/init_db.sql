@@ -48,11 +48,21 @@ CREATE TABLE IF NOT EXISTS model_runs (
     id SERIAL PRIMARY KEY,
     generated_at TIMESTAMPTZ,
     sample_size INTEGER,
-    overall_per_km DOUBLE PRECISION,
+    overall_per_km JSONB,  -- {"n", "min", "max", "avg", "median"} -- same shape as the original pipeline's output
     min_plausible_per_km DOUBLE PRECISION,
     notes TEXT,
     imported_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- One-time upgrade path for a DB created before this column was JSONB;
+-- guarded so re-running this script doesn't wipe real data every time.
+DO $$
+BEGIN
+    IF (SELECT data_type FROM information_schema.columns
+        WHERE table_name = 'model_runs' AND column_name = 'overall_per_km') = 'double precision' THEN
+        ALTER TABLE model_runs ALTER COLUMN overall_per_km TYPE JSONB USING NULL;
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS geocode_cache (
     place_key TEXT PRIMARY KEY,
@@ -111,8 +121,16 @@ CREATE TABLE IF NOT EXISTS messages (
 -- with an unparseable timestamp (dt IS NULL) is never deduped against any
 -- other message -- matching the original pipeline's explicit behavior of
 -- always keeping (never deduping) messages it couldn't timestamp.
-CREATE UNIQUE INDEX IF NOT EXISTS messages_dedupe_key
-    ON messages (group_key, dt, text);
+--
+-- Indexes on the raw `text` directly hit Postgres's btree row-size limit
+-- (~2704 bytes) for the occasional very long forwarded message -- indexing
+-- an md5() hash instead keeps the index row bounded regardless of message
+-- length, at effectively zero collision risk for this purpose. Drop+recreate
+-- (rather than IF NOT EXISTS) since an earlier version of this index was
+-- defined directly on the raw column.
+DROP INDEX IF EXISTS messages_dedupe_key;
+CREATE UNIQUE INDEX messages_dedupe_key
+    ON messages (group_key, dt, md5(text));
 
 CREATE INDEX IF NOT EXISTS messages_route_idx ON messages (route_origin, route_dest)
     WHERE route_origin IS NOT NULL;

@@ -49,33 +49,37 @@ def migrate_training_data(conn, model_data):
     print(f"training_rows: {total_before} raw -> {len(unique_rows)} unique "
           f"({groups_with_dupes} duplicate groups)")
 
-    for r in unique_rows:
-        conn.execute(
+    with conn.cursor() as cur:
+        cur.executemany(
             """INSERT INTO training_rows
                    (origin_raw, destination_raw, distance_km, vehicle_type, freight, per_km, occurrence_count)
                VALUES (%s, %s, %s, %s, %s, %s, %s)
                ON CONFLICT (origin_raw, destination_raw, distance_km, vehicle_type, freight, per_km)
                DO UPDATE SET occurrence_count = EXCLUDED.occurrence_count""",
-            (r["o"], r["d"], r["km"], r["veh"], r["freight"], r["per_km"], r["occurrence_count"]),
+            [(r["o"], r["d"], r["km"], r["veh"], r["freight"], r["per_km"], r["occurrence_count"])
+             for r in unique_rows],
         )
 
     thin_flags = flag_thin_vehicle_classes(unique_rows)
     thin_list = [v for v, info in thin_flags.items() if info["sample_quality"] == "thin"]
     print(f"vehicle classes flagged thin (n < 3): {thin_list or 'none'}")
-    for veh, info in thin_flags.items():
-        conn.execute(
-            """INSERT INTO vehicle_stats (vehicle_type, n, sample_quality)
-               VALUES (%s, %s, %s)
-               ON CONFLICT (vehicle_type) DO UPDATE SET n = EXCLUDED.n, sample_quality = EXCLUDED.sample_quality""",
-            (veh, info["n"], info["sample_quality"]),
-        )
+    if thin_flags:
+        with conn.cursor() as cur:
+            cur.executemany(
+                """INSERT INTO vehicle_stats (vehicle_type, n, sample_quality)
+                   VALUES (%s, %s, %s)
+                   ON CONFLICT (vehicle_type) DO UPDATE SET n = EXCLUDED.n, sample_quality = EXCLUDED.sample_quality""",
+                [(veh, info["n"], info["sample_quality"]) for veh, info in thin_flags.items()],
+            )
 
-    for bucket, avg in model_data.get("bucket_avg_per_km", {}).items():
-        conn.execute(
-            """INSERT INTO bucket_avg_per_km (distance_km_bucket, avg_per_km) VALUES (%s, %s)
-               ON CONFLICT (distance_km_bucket) DO UPDATE SET avg_per_km = EXCLUDED.avg_per_km""",
-            (float(bucket), avg),
-        )
+    bucket_items = model_data.get("bucket_avg_per_km", {}).items()
+    if bucket_items:
+        with conn.cursor() as cur:
+            cur.executemany(
+                """INSERT INTO bucket_avg_per_km (distance_km_bucket, avg_per_km) VALUES (%s, %s)
+                   ON CONFLICT (distance_km_bucket) DO UPDATE SET avg_per_km = EXCLUDED.avg_per_km""",
+                [(float(bucket), avg) for bucket, avg in bucket_items],
+            )
 
     conn.execute(
         """INSERT INTO model_runs (generated_at, sample_size, overall_per_km, min_plausible_per_km, notes)
@@ -83,7 +87,7 @@ def migrate_training_data(conn, model_data):
         (
             model_data.get("generated_at"),
             model_data.get("sample_size"),
-            model_data.get("overall_per_km"),
+            json.dumps(model_data.get("overall_per_km")),
             model_data.get("min_plausible_per_km"),
             model_data.get("notes"),
         ),
@@ -91,7 +95,8 @@ def migrate_training_data(conn, model_data):
 
 
 def migrate_corridors(conn, model_data, geo_cache):
-    n_ok, n_failed = 0, 0
+    to_insert = []
+    n_failed = 0
     for c in model_data.get("known_corridors", []):
         a_coords = geocode(c["a"], geo_cache)
         b_coords = geocode(c["b"], geo_cache)
@@ -99,24 +104,27 @@ def migrate_corridors(conn, model_data, geo_cache):
             n_failed += 1
             print(f"  could not geocode corridor endpoint(s): {c['a']} <-> {c['b']}")
             continue
-        n_ok += 1
-        conn.execute(
-            """INSERT INTO corridors
-                   (origin_name, destination_name, origin_lat, origin_lon,
-                    destination_lat, destination_lon, pair_key, n, median_per_km,
-                    min_freight, max_freight, vehicles)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-               ON CONFLICT (pair_key) DO UPDATE SET
-                   n = EXCLUDED.n, median_per_km = EXCLUDED.median_per_km,
-                   min_freight = EXCLUDED.min_freight, max_freight = EXCLUDED.max_freight,
-                   vehicles = EXCLUDED.vehicles, updated_at = now()""",
-            (
-                c["a"], c["b"], a_coords[0], a_coords[1], b_coords[0], b_coords[1],
-                _corridor_pair_key(a_coords, b_coords), c["n"], c["median_per_km"],
-                c.get("min_freight"), c.get("max_freight"), json.dumps(c.get("vehicles")),
-            ),
-        )
-    print(f"corridors: {n_ok} geocoded and inserted, {n_failed} failed")
+        to_insert.append((
+            c["a"], c["b"], a_coords[0], a_coords[1], b_coords[0], b_coords[1],
+            _corridor_pair_key(a_coords, b_coords), c["n"], c["median_per_km"],
+            c.get("min_freight"), c.get("max_freight"), json.dumps(c.get("vehicles")),
+        ))
+
+    if to_insert:
+        with conn.cursor() as cur:
+            cur.executemany(
+                """INSERT INTO corridors
+                       (origin_name, destination_name, origin_lat, origin_lon,
+                        destination_lat, destination_lon, pair_key, n, median_per_km,
+                        min_freight, max_freight, vehicles)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                   ON CONFLICT (pair_key) DO UPDATE SET
+                       n = EXCLUDED.n, median_per_km = EXCLUDED.median_per_km,
+                       min_freight = EXCLUDED.min_freight, max_freight = EXCLUDED.max_freight,
+                       vehicles = EXCLUDED.vehicles, updated_at = now()""",
+                to_insert,
+            )
+    print(f"corridors: {len(to_insert)} geocoded and inserted, {n_failed} failed")
 
 
 def migrate_caches(conn, geo_cache):
