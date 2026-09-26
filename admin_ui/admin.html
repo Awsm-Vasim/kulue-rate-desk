@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sahirate — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&family=Poppins:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f2f2f5; --surface: #ffffff; --ink: #18181a; --muted: #8b8d93; --line: #e8e8ec;
+    --accent: #ee6a2e; --accent-2: #f4923f; --accent-ink: #c1491c; --accent-soft: #fdebe1;
+    --accent-contrast: #ffffff; --good: #2fa360; --bad: #d64545;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121214; --surface: #1d1d20; --ink: #f4f4f5; --muted: #9a9ba1; --line: #2d2d32;
+      --accent: #f47b3f; --accent-2: #ffab6b; --accent-ink: #ffb27e; --accent-soft: #3a2416;
+      --accent-contrast: #1a1108; --good: #4cbf82; --bad: #e0685f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans", system-ui, sans-serif; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 20px 16px 64px; }
+  h1 { font-family: "Poppins", sans-serif; font-weight: 800; font-size: 22px; margin: 0 0 2px; }
+  .tagline { color: var(--muted); font-size: 12.5px; margin: 0 0 18px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin-bottom: 16px; }
+  .card h2 { font-family: "Poppins", sans-serif; font-size: 14px; font-weight: 700; margin: 0 0 12px;
+    text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .stat-row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .stat { flex: 1; min-width: 110px; background: var(--accent-soft); border-radius: 12px; padding: 12px 14px; }
+  .stat .k { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--accent-ink); }
+  .stat .v { font-family: "IBM Plex Mono", monospace; font-size: 20px; font-weight: 700; margin-top: 2px; }
+  .tp-head { display: flex; justify-content: space-between; align-items: baseline; margin-top: 14px; }
+  .tp-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .tp-pct { font-family: "IBM Plex Mono", monospace; font-size: 16px; font-weight: 700; color: var(--accent-ink); }
+  .tp-bar { margin-top: 8px; height: 8px; border-radius: 999px; background: var(--accent-soft); overflow: hidden; }
+  .tp-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent-2), var(--accent));
+    border-radius: 999px; transition: width .5s ease; }
+  .tp-sub { margin-top: 6px; font-size: 11.5px; color: var(--muted); }
+
+  .upload-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  input[type=file] { flex: 1; min-width: 180px; font-size: 13px; }
+  input[type=text] { flex: 1; min-width: 140px; padding: 9px 12px; border-radius: 10px; border: 1.5px solid var(--line);
+    background: var(--bg); color: var(--ink); font-family: inherit; font-size: 13.5px; }
+  button { appearance: none; cursor: pointer; font-family: "IBM Plex Sans", sans-serif; font-weight: 700; font-size: 13.5px;
+    padding: 10px 18px; border-radius: 999px; border: none; background: linear-gradient(135deg, var(--accent-2), var(--accent));
+    color: var(--accent-contrast); }
+  button:disabled { opacity: .55; cursor: default; }
+  button.secondary { background: var(--surface); border: 1.5px solid var(--line); color: var(--ink); }
+  .hint { font-size: 11.5px; color: var(--muted); margin-top: 8px; }
+  .status-box { margin-top: 12px; font-size: 13px; padding: 10px 12px; border-radius: 10px; display: none; }
+  .status-box.ok { display: block; background: var(--accent-soft); color: var(--accent-ink); }
+  .status-box.err { display: block; background: color-mix(in srgb, var(--bad) 15%, transparent); color: var(--bad); }
+
+  .analytics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 480px) { .analytics-grid { grid-template-columns: 1fr; } }
+  .analytics-block h3 { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--muted); margin: 0 0 8px; }
+  .rank-list { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+  .rank-list li { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--line); }
+  .rank-list li:last-child { border-bottom: none; }
+  .rank-list .n { font-family: "IBM Plex Mono", monospace; color: var(--muted); font-size: 12px; }
+  .state-chip-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .state-chip { font-size: 11.5px; padding: 3px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-ink); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 10.5px; letter-spacing: .03em; }
+  .table-wrap { overflow-x: auto; }
+  .card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .card-head h2 { margin: 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Sahirate — Admin</h1>
+  <p class="tagline">Upload new WhatsApp export batches and track the training data.</p>
+
+  <div class="card">
+    <h2>Data available</h2>
+    <div class="stat-row">
+      <div class="stat"><div class="k">Messages</div><div class="v" id="statMessages">—</div></div>
+      <div class="stat"><div class="k">Priced quotes</div><div class="v" id="statQuotes">—</div></div>
+      <div class="stat"><div class="k">Corridors</div><div class="v" id="statCorridors">—</div></div>
+    </div>
+    <div class="tp-head">
+      <span class="tp-label">Training progress</span>
+      <span class="tp-pct" id="tpPct">—</span>
+    </div>
+    <div class="tp-bar"><div class="tp-fill" id="tpFill"></div></div>
+    <div class="tp-sub" id="tpSub"></div>
+  </div>
+
+  <div class="card">
+    <h2>Upload a new WhatsApp export</h2>
+    <form id="uploadForm">
+      <div class="upload-row">
+        <input type="file" id="fileInput" accept=".zip" required>
+        <input type="text" id="labelInput" placeholder="Label (optional, e.g. Oct 2026 batch)">
+        <button type="submit" id="uploadBtn">Upload &amp; process</button>
+      </div>
+      <div class="hint">Accepts a .zip export from WhatsApp (a batch of group chats, or a single chat).
+        New locations found in this batch take a bit longer to process (rate-limited geocoding) —
+        typically well under a minute.</div>
+      <div class="status-box" id="statusBox"></div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Market intelligence</h2>
+    <div class="analytics-grid">
+      <div class="analytics-block">
+        <h3>Most loaded (from)</h3>
+        <ul class="rank-list" id="topOrigins"></ul>
+      </div>
+      <div class="analytics-block">
+        <h3>Most unloaded (to)</h3>
+        <ul class="rank-list" id="topDests"></ul>
+      </div>
+      <div class="analytics-block">
+        <h3>Top material</h3>
+        <ul class="rank-list" id="topMaterials"></ul>
+      </div>
+      <div class="analytics-block">
+        <h3>Top vehicle type</h3>
+        <ul class="rank-list" id="topVehicles"></ul>
+      </div>
+    </div>
+    <div class="analytics-block" style="margin-top:14px">
+      <h3>States with no data yet</h3>
+      <div class="state-chip-list" id="missingStates"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>Upload history</h2>
+      <button class="secondary" id="exportBtn">Download as Excel</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Label</th><th>Date</th><th>Groups</th><th>Messages</th><th>Added</th><th>Duplicates</th></tr></thead>
+        <tbody id="batchRows"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  function money(n) { return n == null ? "—" : Math.round(n).toLocaleString("en-IN"); }
+
+  function renderList(el, items) {
+    el.innerHTML = items.length
+      ? items.map(function (it) { return "<li><span>" + it.name + "</span><span class=\"n\">" + it.count + "</span></li>"; }).join("")
+      : "<li><span>—</span></li>";
+  }
+
+  function loadStatus() {
+    fetch("/api/admin/status").then(function (r) { return r.json(); }).then(function (d) {
+      document.getElementById("statMessages").textContent = money(d.total_messages);
+      document.getElementById("statQuotes").textContent = money(d.training_rows);
+      document.getElementById("statCorridors").textContent = money(d.known_corridors);
+      var tp = d.training_progress || {};
+      document.getElementById("tpPct").textContent = (tp.percent != null ? tp.percent : "—") + "%";
+      document.getElementById("tpFill").style.width = (tp.percent || 0) + "%";
+      document.getElementById("tpSub").textContent = tp.well_sampled_corridors != null
+        ? tp.well_sampled_corridors + " of " + tp.target_corridors + " target corridors have " +
+          tp.target_min_quotes + "+ verified quotes"
+        : "";
+    }).catch(function () {});
+  }
+
+  function loadAnalytics() {
+    fetch("/api/admin/analytics").then(function (r) { return r.json(); }).then(function (d) {
+      renderList(document.getElementById("topOrigins"), d.top_loading_locations || []);
+      renderList(document.getElementById("topDests"), d.top_unloading_locations || []);
+      renderList(document.getElementById("topMaterials"), d.top_materials || []);
+      renderList(document.getElementById("topVehicles"), d.top_vehicle_types || []);
+      var ms = document.getElementById("missingStates");
+      ms.innerHTML = (d.missing_states || []).map(function (s) {
+        return "<span class=\"state-chip\">" + s + "</span>";
+      }).join("") || "<span class=\"state-chip\">All covered</span>";
+    }).catch(function () {});
+  }
+
+  function loadBatches() {
+    fetch("/api/admin/batches").then(function (r) { return r.json(); }).then(function (d) {
+      var rows = d.batches || [];
+      document.getElementById("batchRows").innerHTML = rows.length ? rows.map(function (b) {
+        var date = b.run_at ? new Date(b.run_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "—";
+        return "<tr><td>" + b.label + "</td><td>" + date + "</td><td>" + b.groups_in_batch +
+          "</td><td>" + b.messages_in_batch + "</td><td>" + b.added + "</td><td>" + b.duplicates_skipped + "</td></tr>";
+      }).join("") : "<tr><td colspan=6>No uploads yet.</td></tr>";
+    }).catch(function () {});
+  }
+
+  function refreshAll() { loadStatus(); loadAnalytics(); loadBatches(); }
+  refreshAll();
+
+  document.getElementById("exportBtn").addEventListener("click", function () {
+    window.location.href = "/api/admin/batches/export";
+  });
+
+  document.getElementById("uploadForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var fileInput = document.getElementById("fileInput");
+    var labelInput = document.getElementById("labelInput");
+    var btn = document.getElementById("uploadBtn");
+    var box = document.getElementById("statusBox");
+    if (!fileInput.files.length) return;
+
+    var fd = new FormData();
+    fd.append("file", fileInput.files[0]);
+    fd.append("label", labelInput.value || "");
+
+    btn.disabled = true;
+    btn.textContent = "Processing…";
+    box.className = "status-box ok";
+    box.style.display = "block";
+    box.textContent = "Parsing and geocoding — this can take a minute for batches with new locations.";
+
+    fetch("/api/admin/upload", { method: "POST", body: fd })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        if (!res.ok) throw new Error(res.d.detail || "Upload failed");
+        var d = res.d;
+        box.className = "status-box ok";
+        box.textContent = "Added " + d.added + " new message(s), skipped " + d.duplicates_skipped +
+          " duplicate(s), from " + d.groups_in_batch + " group(s). Now " + d.priced_quotes +
+          " priced quotes across " + d.known_corridors + " corridors.";
+        fileInput.value = "";
+        labelInput.value = "";
+        refreshAll();
+      })
+      .catch(function (err) {
+        box.className = "status-box err";
+        box.textContent = err.message;
+      })
+      .finally(function () {
+        btn.disabled = false;
+        btn.textContent = "Upload & process";
+      });
+  });
+</script>
+</body>
+</html>

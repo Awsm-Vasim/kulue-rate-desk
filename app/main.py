@@ -309,4 +309,8 @@ def feedback(req: FeedbackRequest):
     return {"ok": True}
 
 
+from app import admin  # noqa: E402  (after pricing_model exists -- admin imports from app.main lazily)
+
+app.include_router(admin.router)
+
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

@@ -104,6 +104,30 @@ def distance_db_cache():
     )
 
 
+def get_places_missing_state():
+    """Resolved places in geocode_cache with no state yet -- used by the
+    admin dashboard's "states with no data" stat and its one-time backfill
+    script (kept separate from geocode_db_cache() above since that adapter's
+    [lat, lon] value shape is relied on throughout app/geocode.py)."""
+    with get_pool().connection() as conn:
+        return conn.execute(
+            "SELECT place_key, lat, lon FROM geocode_cache WHERE resolved AND state IS NULL"
+        ).fetchall()
+
+
+def set_place_state(place_key, state):
+    with get_pool().connection() as conn:
+        conn.execute("UPDATE geocode_cache SET state = %s WHERE place_key = %s", (state, place_key))
+
+
+def get_covered_states():
+    with get_pool().connection() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT state FROM geocode_cache WHERE state IS NOT NULL"
+        ).fetchall()
+    return sorted({r[0] for r in rows if r[0]})
+
+
 def insert_feedback(accurate, comment, quote):
     import json
     with get_pool().connection() as conn:

@@ -169,6 +169,21 @@ def _viewbox_around(lat, lon, deg=0.6):
     return f"{lon - deg},{lat + deg},{lon + deg},{lat - deg}"
 
 
+def reverse_state(lat, lon):
+    """Looks up the Indian state/UT a coordinate falls in, via Nominatim's
+    reverse-geocoding endpoint with addressdetails=1 -- used only for the
+    admin dashboard's "states we have no data for" stat, not on the hot
+    /api/quote path, so its extra request cost only applies once per place
+    (cached alongside lat/lon in geocode_cache, see app/db.py)."""
+    params = {"lat": lat, "lon": lon, "format": "json", "addressdetails": 1, "zoom": 5}
+    url = "https://nominatim.openstreetmap.org/reverse?" + urllib.parse.urlencode(params)
+    try:
+        data = _get_json(url)
+        return data.get("address", {}).get("state")
+    except Exception:
+        return None
+
+
 def geocode(place, cache):
     """Resolves a place name to [lat, lon], trying a few strategies. Cached by
     a normalized (casefolded, whitespace-collapsed) key so repeat lookups
