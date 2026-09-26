@@ -11,8 +11,15 @@ per-sample list so PricingModel's statistics are unaffected.
 
 Used standalone (verify_cleaning.py) against the current JSON file, and later
 reused as the import stage of scripts/migrate_json_to_postgres.py.
+
+Also has the geocode/distance cache key normalizers, shared between
+scripts/normalize_seed_caches.py (fixes the committed JSON seed files that
+app/geocode.py's normalized lookups now require) and
+scripts/migrate_json_to_postgres.py (same re-keying, for the Postgres path).
 """
 from collections import Counter
+
+from app.geocode import normalize_place_key
 
 MIN_VEHICLE_SAMPLES = 3
 MAX_CACHE_KEY_LEN = 200  # matches app/main.py's _ShortStr override cap
@@ -64,6 +71,32 @@ def flag_thin_vehicle_classes(unique_rows):
         veh: {"n": n, "sample_quality": "ok" if n >= MIN_VEHICLE_SAMPLES else "thin"}
         for veh, n in n_by_vehicle.items()
     }
+
+
+def normalize_geo_cache(raw):
+    """The committed seed file uses un-normalized keys (e.g. 'Aluva'), but
+    app/geocode.py's geocode()/route_km() look up by normalize_place_key()
+    (casefolded, whitespace-collapsed). Re-key here so the vetted seed data
+    actually gets hit by live lookups instead of silently missing and
+    forcing a fresh (slower, and not guaranteed identical) re-geocode."""
+    out = {}
+    for key, value in raw.items():
+        out[normalize_place_key(key)] = value
+    return out
+
+
+def normalize_dist_cache(raw):
+    """distance_cache keys are '<origin> | <destination>' sorted on the RAW
+    strings; route_km() now sorts on normalized strings, so each key must be
+    rebuilt from its two parts rather than just re-cased as a whole string."""
+    out = {}
+    for key, value in raw.items():
+        parts = key.split(" | ")
+        if len(parts) != 2:
+            continue  # e.g. the known-corrupted single-giant-key entry
+        new_key = " | ".join(sorted(normalize_place_key(p) for p in parts))
+        out[new_key] = value
+    return out
 
 
 def clean_cache_seed(cache_dict):

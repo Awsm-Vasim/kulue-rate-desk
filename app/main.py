@@ -213,7 +213,10 @@ def quote(req: QuoteRequest):
         origin_coords = get_cached_coords(parsed["origin"], geo_cache)
         destination_coords = get_cached_coords(parsed["destination"], geo_cache)
         pred = pricing_model.predict(origin_coords, destination_coords, km, pricing_vehicle)
-    per_ton = round(pred["total"] / parsed["weight_tons"]) if parsed.get("weight_tons") else None
+    weight_tons = parsed.get("weight_tons")
+    per_ton = round(pred["total"] / weight_tons) if weight_tons else None
+    per_ton_low = round(pred["total_low"] / weight_tons) if weight_tons else None
+    per_ton_high = round(pred["total_high"] / weight_tons) if weight_tons else None
 
     offered_price_check = None
     if req.offered_price is not None:
@@ -235,6 +238,8 @@ def quote(req: QuoteRequest):
         "total_price_high": pred["total_high"],
         "total_price_suggested": pred["total"],
         "price_per_ton": per_ton,
+        "price_per_ton_low": per_ton_low,
+        "price_per_ton_high": per_ton_high,
         "offered_price_check": offered_price_check,
     }
 

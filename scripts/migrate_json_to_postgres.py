@@ -15,9 +15,15 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import db
-from app.geocode import geocode, normalize_place_key
+from app.geocode import geocode
 from app.pricing import COORD_GRID_PRECISION
-from scripts.data_cleaning import clean_cache_seed, dedupe_training_rows, flag_thin_vehicle_classes
+from scripts.data_cleaning import (
+    clean_cache_seed,
+    dedupe_training_rows,
+    flag_thin_vehicle_classes,
+    normalize_dist_cache,
+    normalize_geo_cache,
+)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -29,31 +35,6 @@ def _load_json(name):
         return None
     with open(path) as f:
         return json.load(f)
-
-
-def _normalize_geo_cache(raw):
-    """The committed seed files use un-normalized keys (e.g. 'Aluva'), but
-    app/geocode.py's geocode()/route_km() now look up by normalize_place_key()
-    (casefolded, whitespace-collapsed). Re-key here so migrated data actually
-    gets hit by live lookups instead of silently missing and re-geocoding."""
-    out = {}
-    for key, value in raw.items():
-        out[normalize_place_key(key)] = value
-    return out
-
-
-def _normalize_dist_cache(raw):
-    """distance_cache keys are '<origin> | <destination>' sorted on the RAW
-    strings; route_km() now sorts on normalized strings, so each key must be
-    rebuilt from its two parts rather than just re-cased as a whole string."""
-    out = {}
-    for key, value in raw.items():
-        parts = key.split(" | ")
-        if len(parts) != 2:
-            continue  # e.g. the known-corrupted single-giant-key entry
-        new_key = " | ".join(sorted(normalize_place_key(p) for p in parts))
-        out[new_key] = value
-    return out
 
 
 def _corridor_pair_key(a_coords, b_coords):
@@ -153,7 +134,7 @@ def migrate_caches(conn, geo_cache):
 
     dist_seed = _load_json("distance_cache_seed.json") or {}
     dist_runtime = _load_json("distance_cache.json") or {}
-    merged = _normalize_dist_cache({**dist_seed, **dist_runtime})
+    merged = normalize_dist_cache({**dist_seed, **dist_runtime})
     cleaned, dropped = clean_cache_seed(merged)
     for key, value in cleaned.items():
         conn.execute(
@@ -189,7 +170,7 @@ def main():
 
     geo_seed = _load_json("geocode_cache_seed.json") or {}
     geo_runtime = _load_json("geocode_cache.json") or {}
-    geo_cache = _normalize_geo_cache({**geo_seed, **geo_runtime})  # runtime wins
+    geo_cache = normalize_geo_cache({**geo_seed, **geo_runtime})  # runtime wins
 
     with db.get_pool().connection() as conn:
         migrate_training_data(conn, model_data)

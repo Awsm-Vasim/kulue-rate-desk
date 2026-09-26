@@ -129,10 +129,10 @@
     display: flex; flex-wrap: wrap; gap: 18px; justify-content: space-between; align-items: flex-end; }
   .meter-block .k { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
     color: var(--accent-ink); opacity: .8; }
-  .meter-block .v { font-family: "IBM Plex Mono", monospace; font-weight: 600; font-size: 24px;
-    color: var(--accent-ink); margin-top: 2px; }
+  .meter-block .v { font-family: "IBM Plex Mono", monospace; font-weight: 600; font-size: 19px;
+    color: var(--accent-ink); margin-top: 2px; white-space: nowrap; }
   .meter-block .v small { font-size: 13px; font-weight: 500; }
-  .meter-block.per-ton .v { font-size: 28px; }
+  .meter-block.per-ton .v { font-size: 20px; }
   .range-line { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; color: var(--accent-ink); opacity: .85; margin-top: 4px; }
   .confidence-line { margin-top: 6px; font-size: 12px; color: var(--muted); }
   .confidence-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10.5px;
@@ -290,13 +290,14 @@
         </div>
         <div class="price-meter">
           <div class="meter-block">
-            <div class="k">Suggested total</div>
-            <div class="v"><small>₹</small><span id="resTotal">—</span></div>
-            <div class="range-line" id="resRange"></div>
+            <div class="k">Suggested range</div>
+            <div class="v" id="resRange">—</div>
+            <div class="range-line" id="resTypical"></div>
           </div>
           <div class="meter-block per-ton">
             <div class="k">Per ton</div>
-            <div class="v"><small>₹</small><span id="resPerTon">—</span></div>
+            <div class="v" id="resPerTon">—</div>
+            <div class="range-line" id="resPerTonTypical"></div>
           </div>
         </div>
         <div class="fact-grid">
@@ -388,9 +389,10 @@
     result: document.getElementById("result"),
     resRoute: document.getElementById("resRoute"),
     resDate: document.getElementById("resDate"),
-    resTotal: document.getElementById("resTotal"),
     resRange: document.getElementById("resRange"),
+    resTypical: document.getElementById("resTypical"),
     resPerTon: document.getElementById("resPerTon"),
+    resPerTonTypical: document.getElementById("resPerTonTypical"),
     factKm: document.getElementById("factKm"),
     factRate: document.getElementById("factRate"),
     factVeh: document.getElementById("factVeh"),
@@ -645,9 +647,15 @@
     var p = data.parsed || {};
     els.resRoute.textContent = (p.origin || "?") + " → " + (p.destination || "?");
     els.resDate.textContent = p.date || "";
-    els.resTotal.textContent = money(data.total_price_suggested);
-    els.resRange.textContent = "Negotiation range: ₹" + money(data.total_price_low) + " – ₹" + money(data.total_price_high);
-    els.resPerTon.textContent = data.price_per_ton != null ? money(data.price_per_ton) : "—";
+    els.resRange.textContent = "₹" + money(data.total_price_low) + " – ₹" + money(data.total_price_high);
+    els.resTypical.textContent = "Typical: ₹" + money(data.total_price_suggested);
+    if (data.price_per_ton_low != null && data.price_per_ton_high != null) {
+      els.resPerTon.textContent = "₹" + money(data.price_per_ton_low) + " – ₹" + money(data.price_per_ton_high);
+      els.resPerTonTypical.textContent = data.price_per_ton != null ? "Typical: ₹" + money(data.price_per_ton) : "";
+    } else {
+      els.resPerTon.textContent = "—";
+      els.resPerTonTypical.textContent = "";
+    }
     els.factKm.textContent = data.distance_km != null ? Math.round(data.distance_km) + " km" : "Unknown";
     els.factRate.textContent = "₹" + data.rate_per_km + "/km";
     if (p.vehicle_type) {
