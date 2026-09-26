@@ -11,12 +11,12 @@ need a plain `model_data` dict -- the same shape data/training_rows.json
 already has -- so no rework was needed there).
 """
 import statistics
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime
 
 from app import db
 from app.geocode import geocode, normalize_place_key, route_km
-from app.pricing import _normalize_vehicle
+from app.pricing import COORD_GRID_PRECISION, _normalize_vehicle
 from scripts.migrate_json_to_postgres import migrate_corridors, migrate_training_data
 
 # Minimum quotes for a specific vehicle type on one corridor before its own
@@ -102,11 +102,39 @@ def rebuild():
         idx = min(len(sorted_vals) - 1, max(0, int(len(sorted_vals) * p)))
         return sorted_vals[idx]
 
+    # Group by resolved (rounded) coordinates, not by the raw place-name
+    # pair -- two spellings of the same city ("Bangalore" vs "Bengaluru",
+    # "Mumbai" vs "Bombay") geocode to the same point but are different
+    # dict keys under a raw-name grouping. That used to split one real,
+    # well-sampled corridor into a big fragment and a tiny one; worse,
+    # migrate_corridors() upserts by this same coordinate-based pair_key,
+    # so whichever name-variant fragment happened to be written last in
+    # the batch silently overwrote the other in the database -- a small
+    # 3-quote "Bengaluru" fragment could erase a real 184-quote
+    # "Bangalore" corridor entirely. Grouping by coordinates up front
+    # means every spelling of the same route contributes to one shared
+    # statistic, and a canonical display name is picked below.
+    def _coord_pair_key(o, d):
+        oc = local_geo.get(normalize_place_key(o))
+        dc = local_geo.get(normalize_place_key(d))
+        if not oc or not dc:
+            return None
+        a = (round(oc[0], COORD_GRID_PRECISION), round(oc[1], COORD_GRID_PRECISION))
+        b = (round(dc[0], COORD_GRID_PRECISION), round(dc[1], COORD_GRID_PRECISION))
+        return tuple(sorted([a, b]))
+
     by_corridor = defaultdict(list)
+    name_votes = defaultdict(Counter)
     for r in rows:
-        by_corridor[tuple(sorted([r["o"], r["d"]]))].append(r)
+        ck = _coord_pair_key(r["o"], r["d"])
+        if ck is None:
+            continue  # shouldn't happen -- both endpoints already resolved above
+        by_corridor[ck].append(r)
+        name_votes[ck][tuple(sorted([r["o"], r["d"]]))] += 1
+
     known_corridors = []
-    for (a, b), qs in by_corridor.items():
+    for ck, qs in by_corridor.items():
+        a, b = name_votes[ck].most_common(1)[0][0]
         freights = sorted(q["freight"] for q in qs)
         per_kms = [q["per_km"] for q in qs]
 

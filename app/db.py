@@ -34,9 +34,19 @@ def get_pool():
         # it a connection can be left sitting "idle in transaction" after a
         # bare read if the caller doesn't explicitly commit, which can stall
         # later queries against the same rows.
+        #
+        # Neon's free tier suspends its compute (and drops connections with
+        # AdminShutdown) after a few minutes of no queries -- exactly what
+        # happens between requests on a low-traffic app. `check` validates
+        # a connection with a cheap query before handing it out and
+        # transparently reconnects if it's dead; `max_idle` recycles
+        # connections proactively so they're less likely to still be
+        # sitting open (and vulnerable to being killed) when Neon suspends.
         _pool = ConnectionPool(
             DATABASE_URL, min_size=1, max_size=5, open=True,
             kwargs={"autocommit": True},
+            check=ConnectionPool.check_connection,
+            max_idle=120,
         )
     return _pool
 
