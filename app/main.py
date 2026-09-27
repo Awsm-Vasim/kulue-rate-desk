@@ -2,6 +2,7 @@ import difflib
 import fcntl
 import json
 import os
+import threading
 from datetime import datetime
 from typing import Annotated, Literal
 
@@ -10,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from app import db
+from app import db, pricing_rebuild
 from app.geocode import (
     GAZETTEER,
     geocode,
@@ -97,6 +98,8 @@ class FeedbackRequest(BaseModel):
     accurate: bool
     comment: str | None = Field(default=None, max_length=2000)
     quote: dict
+    corrected_price: float | None = Field(default=None, gt=0)
+    corrected_unit: Literal["total", "per_ton"] = "total"
 
 
 @app.get("/api/health")
@@ -271,17 +274,59 @@ def quote(req: QuoteRequest):
 
 FEEDBACK_PATH = os.path.join(DATA_DIR, "feedback.json")
 
+# Guards against overlapping rebuilds if corrections come in faster than one
+# rebuild takes to run (a few minutes) -- a plain blocking Lock means each
+# queued rebuild still runs after the one before it, so the last one always
+# sees every correction submitted so far, rather than racing and possibly
+# overwriting fresher results with a stale run that started earlier.
+_rebuild_lock = threading.Lock()
+
+
+def _rebuild_in_background():
+    def run():
+        with _rebuild_lock:
+            try:
+                pricing_rebuild.rebuild()
+            except Exception:
+                pass  # best-effort -- the correction itself is already saved either way
+    threading.Thread(target=run, daemon=True).start()
+
 
 @app.post("/api/feedback")
 def feedback(req: FeedbackRequest):
-    """Stores a poster's accuracy rating (and optional comment/correction) on
-    a quote they just got. Reviewed by hand and folded into
-    manual_quotes.json (see the whatsapp-load-report pipeline's --add-quote)
-    -- not auto-trained on directly, since a raw comment needs a human to
-    turn it into a real route/vehicle/freight data point."""
+    """Stores a poster's accuracy rating on a quote they just got. When it
+    was wrong and they give the real market rate, that correction is folded
+    into the pricing model automatically: it's recorded as a genuine priced
+    message (see db.insert_correction_message), and a rebuild runs in the
+    background so it takes effect within the next few minutes -- no manual
+    review step, which is the whole point during this training phase."""
+    learned = False
+    if not req.accurate and req.corrected_price is not None and db.enabled():
+        origin = req.quote.get("origin")
+        destination = req.quote.get("destination")
+        vehicle_type = req.quote.get("vehicle_type") or req.quote.get("suggested_vehicle_type")
+        weight_tons = req.quote.get("weight_tons")
+
+        if req.corrected_unit == "per_ton" and not weight_tons:
+            raise HTTPException(400, "Enter a weight on the original quote to submit a per-ton rate.")
+        if not origin or not destination:
+            raise HTTPException(400, "This quote is missing an origin/destination -- can't record a correction.")
+
+        if vehicle_type:
+            if req.corrected_unit == "per_ton" and weight_tons:
+                freight = req.corrected_price * float(weight_tons)
+            else:
+                freight = req.corrected_price
+            db.insert_correction_message(origin, destination, round(freight, 2), vehicle_type)
+            _rebuild_in_background()
+            learned = True
+        # No vehicle type known at all (rare -- only if the original quote
+        # also had no weight to suggest one) -- still record the feedback
+        # below, just without folding it into the model automatically.
+
     if db.enabled():
         db.insert_feedback(req.accurate, (req.comment or "").strip() or None, req.quote)
-        return {"ok": True}
+        return {"ok": True, "learned": learned}
 
     lock_path = FEEDBACK_PATH + ".lock"
     with open(lock_path, "a+") as lockf:

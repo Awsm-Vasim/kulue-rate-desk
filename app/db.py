@@ -37,18 +37,38 @@ def get_pool():
         #
         # Neon's free tier suspends its compute (and drops connections with
         # AdminShutdown) after a few minutes of no queries -- exactly what
-        # happens between requests on a low-traffic app. `check` validates
-        # a connection with a cheap query before handing it out and
-        # transparently reconnects if it's dead; `max_idle` recycles
-        # connections proactively so they're less likely to still be
-        # sitting open (and vulnerable to being killed) when Neon suspends.
+        # happens between requests on a low-traffic app. `max_idle` recycles
+        # connections proactively so they're less likely to still be open
+        # (and vulnerable to being killed) when Neon suspends; run_query()
+        # below handles the rest by retrying once if a connection turns out
+        # to be dead anyway. (An earlier attempt used `check=
+        # ConnectionPool.check_connection`, which validates every single
+        # checkout with an extra round-trip -- correct, but this codebase
+        # does hundreds of small queries per pricing rebuild, so that alone
+        # roughly doubled its runtime. Reactive retry costs nothing in the
+        # common case.)
         _pool = ConnectionPool(
             DATABASE_URL, min_size=1, max_size=5, open=True,
             kwargs={"autocommit": True},
-            check=ConnectionPool.check_connection,
             max_idle=120,
         )
     return _pool
+
+
+def run_query(fn):
+    """Runs fn(conn) against a pooled connection, retrying once if the
+    connection turns out to be dead (Neon's free tier can kill an idle
+    pooled connection with AdminShutdown between requests). psycopg_pool
+    discards a connection that raises out of its own `with pool.connection()`
+    block, so the very next checkout gets a fresh one -- a single retry of
+    the whole unit of work is enough to self-heal."""
+    import psycopg
+    try:
+        with get_pool().connection() as conn:
+            return fn(conn)
+    except psycopg.OperationalError:
+        with get_pool().connection() as conn:
+            return fn(conn)
 
 
 class DBCache:
@@ -81,8 +101,7 @@ class DBCache:
             return self._last_row
         cols = ", ".join(self.value_cols)
         sql = f"SELECT {cols} FROM {self.table} WHERE {self.key_col} = %s"
-        with get_pool().connection() as conn:
-            row = conn.execute(sql, (key,)).fetchone()
+        row = run_query(lambda conn: conn.execute(sql, (key,)).fetchone())
         self._last_key = key
         self._last_row = row
         return row
@@ -107,8 +126,7 @@ class DBCache:
             f"INSERT INTO {self.table} ({', '.join(cols)}) VALUES ({placeholders}) "
             f"ON CONFLICT ({self.key_col}) DO UPDATE SET {updates}, updated_at = now()"
         )
-        with get_pool().connection() as conn:
-            conn.execute(sql, (key, *self._encode(value)))
+        run_query(lambda conn: conn.execute(sql, (key, *self._encode(value))))
         if key == self._last_key:
             self._last_key = None  # invalidate the memoized read
 
@@ -142,32 +160,50 @@ def get_places_missing_state():
     admin dashboard's "states with no data" stat and its one-time backfill
     script (kept separate from geocode_db_cache() above since that adapter's
     [lat, lon] value shape is relied on throughout app/geocode.py)."""
-    with get_pool().connection() as conn:
-        return conn.execute(
-            "SELECT place_key, lat, lon FROM geocode_cache WHERE resolved AND state IS NULL"
-        ).fetchall()
+    return run_query(lambda conn: conn.execute(
+        "SELECT place_key, lat, lon FROM geocode_cache WHERE resolved AND state IS NULL"
+    ).fetchall())
 
 
 def set_place_state(place_key, state):
-    with get_pool().connection() as conn:
-        conn.execute("UPDATE geocode_cache SET state = %s WHERE place_key = %s", (state, place_key))
+    run_query(lambda conn: conn.execute(
+        "UPDATE geocode_cache SET state = %s WHERE place_key = %s", (state, place_key)
+    ))
 
 
 def get_covered_states():
-    with get_pool().connection() as conn:
-        rows = conn.execute(
-            "SELECT DISTINCT state FROM geocode_cache WHERE state IS NOT NULL"
-        ).fetchall()
+    rows = run_query(lambda conn: conn.execute(
+        "SELECT DISTINCT state FROM geocode_cache WHERE state IS NOT NULL"
+    ).fetchall())
     return sorted({r[0] for r in rows if r[0]})
 
 
 def insert_feedback(accurate, comment, quote):
     import json
-    with get_pool().connection() as conn:
-        conn.execute(
-            "INSERT INTO feedback (accurate, comment, quote) VALUES (%s, %s, %s)",
-            (accurate, comment, json.dumps(quote)),
-        )
+    run_query(lambda conn: conn.execute(
+        "INSERT INTO feedback (accurate, comment, quote) VALUES (%s, %s, %s)",
+        (accurate, comment, json.dumps(quote)),
+    ))
+
+
+def insert_correction_message(origin, destination, freight, vehicle_type):
+    """Records a poster's "the model was wrong, the real rate is X" feedback
+    as a genuine priced message row -- the same shape a real WhatsApp quote
+    takes -- so the very next pricing_rebuild.rebuild() folds it into that
+    corridor's stats automatically. group_key is a dedicated value (never
+    produced by whatsapp_ingest's dedupe_key()) so a correction can never
+    collide with, or be silently deduped against, a real historical message;
+    `dt` is the actual submission time, giving every correction a distinct
+    dedupe key even if the same route is corrected more than once."""
+    from datetime import datetime
+    text = f"[User correction] {origin} -> {destination}, {vehicle_type}, freight {freight}"
+    run_query(lambda conn: conn.execute(
+        """INSERT INTO messages (group_raw, group_key, dt, text, route_origin,
+                                  route_dest, freight, vehicle_type)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+        ("User correction", "__user_correction__", datetime.now(), text,
+         origin, destination, freight, vehicle_type),
+    ))
 
 
 def load_pricing_model_data():
@@ -177,7 +213,7 @@ def load_pricing_model_data():
     handing off, so PricingModel's frequency-weighted statistics (resid_std,
     vehicle_factor medians) come out numerically identical to computing them
     over the original, undeduplicated row list."""
-    with get_pool().connection() as conn:
+    def _load(conn):
         corridors = conn.execute(
             "SELECT origin_name, destination_name, origin_lat, origin_lon, "
             "destination_lat, destination_lon, n, median_per_km, min_freight, "
@@ -195,6 +231,9 @@ def load_pricing_model_data():
             "SELECT generated_at, sample_size, overall_per_km, min_plausible_per_km, notes "
             "FROM model_runs ORDER BY imported_at DESC LIMIT 1"
         ).fetchone()
+        return corridors, rows, buckets, run
+
+    corridors, rows, buckets, run = run_query(_load)
 
     known_corridors = []
     for (o, d, o_lat, o_lon, d_lat, d_lon, n, median_per_km, min_f, max_f,

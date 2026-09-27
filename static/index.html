@@ -362,19 +362,27 @@
         <div class="feedback-prompt" id="feedbackPrompt">
           <span class="hint">Was this price accurate?</span>
           <div class="feedback-actions">
-            <button type="button" class="fb-btn" id="fbAccurateBtn">Accurate</button>
-            <button type="button" class="fb-btn" id="fbCommentBtn">Add correction</button>
+            <button type="button" class="fb-btn" id="fbAccurateBtn">Right</button>
+            <button type="button" class="fb-btn" id="fbCommentBtn">Wrong</button>
           </div>
         </div>
         <div class="feedback-form" id="feedbackForm" hidden>
-          <label class="field-label" for="fbComment">What's off, or what should it be?</label>
-          <textarea id="fbComment" rows="3" placeholder="e.g. Actual rate for this route is around ₹700/ton"></textarea>
+          <label class="field-label" for="fbRate">What's the actual market rate?</label>
+          <div class="offer-input-group">
+            <input id="fbRate" class="text-input" type="number" min="0" step="1" inputmode="numeric" placeholder="e.g. 15000">
+            <select id="fbRateUnit" class="unit-select">
+              <option value="total">Total amount</option>
+              <option value="per_ton">Per ton</option>
+            </select>
+          </div>
+          <label class="field-label" for="fbComment" style="margin-top:12px;">Notes (optional)</label>
+          <textarea id="fbComment" rows="2" placeholder="Optional context"></textarea>
           <div class="tear">
-            <span class="hint">Reviewed and folded into the training data.</span>
-            <button type="button" class="fb-btn" id="fbSubmitBtn">Submit feedback</button>
+            <span class="hint">Added to the pricing model right away.</span>
+            <button type="button" class="fb-btn" id="fbSubmitBtn">Submit correction</button>
           </div>
         </div>
-        <div class="feedback-thanks" id="feedbackThanks" hidden>Thanks — this has been recorded for review.</div>
+        <div class="feedback-thanks" id="feedbackThanks" hidden></div>
       </div>
     </div>
   </section>
@@ -445,6 +453,8 @@
     fbAccurateBtn: document.getElementById("fbAccurateBtn"),
     fbCommentBtn: document.getElementById("fbCommentBtn"),
     feedbackForm: document.getElementById("feedbackForm"),
+    fbRate: document.getElementById("fbRate"),
+    fbRateUnit: document.getElementById("fbRateUnit"),
     fbComment: document.getElementById("fbComment"),
     fbSubmitBtn: document.getElementById("fbSubmitBtn"),
     feedbackThanks: document.getElementById("feedbackThanks"),
@@ -640,6 +650,9 @@
     els.feedbackPrompt.hidden = false;
     els.feedbackForm.hidden = true;
     els.feedbackThanks.hidden = true;
+    els.feedbackThanks.textContent = "";
+    els.fbRate.value = "";
+    els.fbRateUnit.value = "total";
     els.fbComment.value = "";
   }
 
@@ -654,31 +667,46 @@
     };
   }
 
-  function submitFeedback(accurate, comment) {
+  function submitFeedback(accurate, comment, correctedPrice, correctedUnit) {
     return fetch("/api/feedback", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ accurate: accurate, comment: comment || null, quote: feedbackQuoteSnapshot() }),
+      body: JSON.stringify({
+        accurate: accurate, comment: comment || null, quote: feedbackQuoteSnapshot(),
+        corrected_price: correctedPrice || null, corrected_unit: correctedUnit || "total",
+      }),
     });
   }
 
   els.fbAccurateBtn.addEventListener("click", function () {
-    submitFeedback(true, null).catch(function () {});
+    submitFeedback(true, null, null, null).catch(function () {});
     els.feedbackPrompt.hidden = true;
+    els.feedbackThanks.textContent = "Thanks for confirming!";
     els.feedbackThanks.hidden = false;
   });
 
   els.fbCommentBtn.addEventListener("click", function () {
     els.feedbackForm.hidden = false;
-    els.fbComment.focus();
+    els.fbRate.focus();
   });
 
   els.fbSubmitBtn.addEventListener("click", function () {
+    var rateStr = els.fbRate.value.trim();
+    var rate = parseFloat(rateStr);
+    if (!rateStr || isNaN(rate) || rate <= 0) { els.fbRate.focus(); return; }
     var comment = els.fbComment.value.trim();
-    if (!comment) { els.fbComment.focus(); return; }
-    submitFeedback(false, comment).catch(function () {});
-    els.feedbackPrompt.hidden = true;
-    els.feedbackForm.hidden = true;
-    els.feedbackThanks.hidden = false;
+    submitFeedback(false, comment, rate, els.fbRateUnit.value).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (data) {
+        if (!res.ok) { showError(data.detail || "Couldn't record that correction -- please try again."); return; }
+        els.feedbackPrompt.hidden = true;
+        els.feedbackForm.hidden = true;
+        els.feedbackThanks.textContent = data.learned
+          ? "Thanks -- added to the pricing model."
+          : "Thanks -- recorded for review.";
+        els.feedbackThanks.hidden = false;
+      });
+    }).catch(function () {
+      showError("Couldn't reach the pricing service -- check your connection and try again.");
+    });
   });
 
   function renderResult(data) {
