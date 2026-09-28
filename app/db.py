@@ -206,6 +206,28 @@ def insert_correction_message(origin, destination, freight, vehicle_type):
     ))
 
 
+def archive_corridors_snapshot(model_run_id):
+    """Copies the *current* contents of `corridors` -- the state about to
+    be overwritten -- into `corridors_history`, tagged with the id of the
+    model_runs row for the rebuild that's about to replace it. Called from
+    pricing_rebuild.rebuild() right before it upserts fresh values into
+    `corridors`, so every rebuild leaves a recoverable "before" snapshot
+    behind. Append-only: nothing here is ever updated or deleted."""
+    run_query(lambda conn: conn.execute(
+        """INSERT INTO corridors_history
+               (model_run_id, origin_name, destination_name, origin_lat, origin_lon,
+                destination_lat, destination_lon, pair_key, n, median_per_km,
+                min_freight, max_freight, p10_freight, p90_freight,
+                vehicle_freight_stats, vehicles)
+           SELECT %s, origin_name, destination_name, origin_lat, origin_lon,
+                  destination_lat, destination_lon, pair_key, n, median_per_km,
+                  min_freight, max_freight, p10_freight, p90_freight,
+                  vehicle_freight_stats, vehicles
+           FROM corridors""",
+        (model_run_id,),
+    ))
+
+
 def load_pricing_model_data():
     """Rebuilds the exact dict shape PricingModel.__init__ expects, sourced
     from Postgres instead of training_rows.json. Each stored training_rows

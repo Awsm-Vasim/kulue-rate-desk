@@ -198,7 +198,15 @@ def rebuild():
 
     print(f"rebuild: writing {len(rows)} rows / {len(known_corridors)} corridors...", flush=True)
     with db.get_pool().connection() as conn:
-        migrate_training_data(conn, model_data)
+        migrate_training_data(conn, model_data)  # inserts a fresh model_runs row (never upserted)
+        latest_run_id = conn.execute(
+            "SELECT id FROM model_runs ORDER BY imported_at DESC LIMIT 1"
+        ).fetchone()[0]
+        # Snapshot the corridors table's *current* (about-to-be-replaced)
+        # contents before overwriting it -- see db.archive_corridors_snapshot()
+        # for why: a bad upload/correction can otherwise silently shrink a
+        # corridor's stats with no way back once the next rebuild runs.
+        db.archive_corridors_snapshot(latest_run_id)
         migrate_corridors(conn, model_data, local_geo)  # already-resolved, plain dict -- no network calls
     print("rebuild: write done, reloading pricing model...", flush=True)
 

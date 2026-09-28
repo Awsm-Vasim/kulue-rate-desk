@@ -73,6 +73,34 @@ BEGIN
     END IF;
 END $$;
 
+-- Append-only history of `corridors`, snapshotted right before each rebuild
+-- overwrites it (see pricing_rebuild.rebuild()). Nothing ever updates or
+-- deletes a row here -- if a bad upload/correction ever corrupts a
+-- corridor's live stats, the prior good values are still recoverable here
+-- instead of being gone the moment the next rebuild runs.
+CREATE TABLE IF NOT EXISTS corridors_history (
+    id SERIAL PRIMARY KEY,
+    model_run_id INTEGER REFERENCES model_runs(id),
+    origin_name TEXT NOT NULL,
+    destination_name TEXT NOT NULL,
+    origin_lat DOUBLE PRECISION,
+    origin_lon DOUBLE PRECISION,
+    destination_lat DOUBLE PRECISION,
+    destination_lon DOUBLE PRECISION,
+    pair_key TEXT NOT NULL,
+    n INTEGER NOT NULL,
+    median_per_km DOUBLE PRECISION NOT NULL,
+    min_freight NUMERIC,
+    max_freight NUMERIC,
+    p10_freight NUMERIC,
+    p90_freight NUMERIC,
+    vehicle_freight_stats JSONB,
+    vehicles JSONB,
+    archived_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS corridors_history_pair_idx ON corridors_history (pair_key, archived_at);
+
 CREATE TABLE IF NOT EXISTS geocode_cache (
     place_key TEXT PRIMARY KEY,
     lat DOUBLE PRECISION,
