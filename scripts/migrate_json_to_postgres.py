@@ -45,41 +45,51 @@ def _corridor_pair_key(a_coords, b_coords):
 
 
 def migrate_training_data(conn, model_data):
+    """Fully replaces training_rows/vehicle_stats/bucket_avg_per_km with
+    this run's computation (delete-then-insert inside a transaction, not a
+    plain upsert) -- every call recomputes these from a full rescan of the
+    messages table, so their correct content IS exactly this run's rows,
+    nothing more. Upserting without deleting let stale rows survive forever
+    once their key stopped being produced (e.g. a training_rows tuple whose
+    distance_km changed after a geocoding fix doesn't match its old row's
+    unique key, so the old, now-wrong row just sat there polluting
+    resid_std/bucket-curve statistics instead of being replaced)."""
     unique_rows, total_before, groups_with_dupes = dedupe_training_rows(model_data["training_rows"])
     print(f"training_rows: {total_before} raw -> {len(unique_rows)} unique "
           f"({groups_with_dupes} duplicate groups)")
 
-    with conn.cursor() as cur:
-        cur.executemany(
-            """INSERT INTO training_rows
-                   (origin_raw, destination_raw, distance_km, vehicle_type, freight, per_km, occurrence_count)
-               VALUES (%s, %s, %s, %s, %s, %s, %s)
-               ON CONFLICT (origin_raw, destination_raw, distance_km, vehicle_type, freight, per_km)
-               DO UPDATE SET occurrence_count = EXCLUDED.occurrence_count""",
-            [(r["o"], r["d"], r["km"], r["veh"], r["freight"], r["per_km"], r["occurrence_count"])
-             for r in unique_rows],
-        )
+    with conn.transaction():
+        conn.execute("DELETE FROM training_rows")
+        with conn.cursor() as cur:
+            cur.executemany(
+                """INSERT INTO training_rows
+                       (origin_raw, destination_raw, distance_km, vehicle_type, freight, per_km, occurrence_count)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                [(r["o"], r["d"], r["km"], r["veh"], r["freight"], r["per_km"], r["occurrence_count"])
+                 for r in unique_rows],
+            )
 
     thin_flags = flag_thin_vehicle_classes(unique_rows)
     thin_list = [v for v, info in thin_flags.items() if info["sample_quality"] == "thin"]
     print(f"vehicle classes flagged thin (n < 3): {thin_list or 'none'}")
-    if thin_flags:
-        with conn.cursor() as cur:
-            cur.executemany(
-                """INSERT INTO vehicle_stats (vehicle_type, n, sample_quality)
-                   VALUES (%s, %s, %s)
-                   ON CONFLICT (vehicle_type) DO UPDATE SET n = EXCLUDED.n, sample_quality = EXCLUDED.sample_quality""",
-                [(veh, info["n"], info["sample_quality"]) for veh, info in thin_flags.items()],
-            )
+    with conn.transaction():
+        conn.execute("DELETE FROM vehicle_stats")
+        if thin_flags:
+            with conn.cursor() as cur:
+                cur.executemany(
+                    "INSERT INTO vehicle_stats (vehicle_type, n, sample_quality) VALUES (%s, %s, %s)",
+                    [(veh, info["n"], info["sample_quality"]) for veh, info in thin_flags.items()],
+                )
 
     bucket_items = model_data.get("bucket_avg_per_km", {}).items()
-    if bucket_items:
-        with conn.cursor() as cur:
-            cur.executemany(
-                """INSERT INTO bucket_avg_per_km (distance_km_bucket, avg_per_km) VALUES (%s, %s)
-                   ON CONFLICT (distance_km_bucket) DO UPDATE SET avg_per_km = EXCLUDED.avg_per_km""",
-                [(float(bucket), avg) for bucket, avg in bucket_items],
-            )
+    with conn.transaction():
+        conn.execute("DELETE FROM bucket_avg_per_km")
+        if bucket_items:
+            with conn.cursor() as cur:
+                cur.executemany(
+                    "INSERT INTO bucket_avg_per_km (distance_km_bucket, avg_per_km) VALUES (%s, %s)",
+                    [(float(bucket), avg) for bucket, avg in bucket_items],
+                )
 
     conn.execute(
         """INSERT INTO model_runs (generated_at, sample_size, overall_per_km, min_plausible_per_km, notes)
@@ -112,23 +122,31 @@ def migrate_corridors(conn, model_data, geo_cache):
             json.dumps(c.get("vehicle_freight_stats")), json.dumps(c.get("vehicles")),
         ))
 
-    if to_insert:
-        with conn.cursor() as cur:
-            cur.executemany(
-                """INSERT INTO corridors
-                       (origin_name, destination_name, origin_lat, origin_lon,
-                        destination_lat, destination_lon, pair_key, n, median_per_km,
-                        min_freight, max_freight, p10_freight, p90_freight,
-                        vehicle_freight_stats, vehicles)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                   ON CONFLICT (pair_key) DO UPDATE SET
-                       n = EXCLUDED.n, median_per_km = EXCLUDED.median_per_km,
-                       min_freight = EXCLUDED.min_freight, max_freight = EXCLUDED.max_freight,
-                       p10_freight = EXCLUDED.p10_freight, p90_freight = EXCLUDED.p90_freight,
-                       vehicle_freight_stats = EXCLUDED.vehicle_freight_stats,
-                       vehicles = EXCLUDED.vehicles, updated_at = now()""",
-                to_insert,
-            )
+    # Full replace (delete-then-insert), not a plain upsert -- a corridor's
+    # pair_key is derived from its resolved coordinates, so correcting a
+    # place's geocoded position changes which pair_key it produces. Upsert
+    # alone left the *old* pair_key's row sitting in the table forever
+    # (never matched again, so never updated, never removed) -- harmless
+    # for live pricing (a stale row's coordinates never match a fresh
+    # lookup again) but it inflated corridor counts and, worse, meant a
+    # once-real corridor with a now-wrong pair_key silently vanished from
+    # results while its stale twin lingered. pricing_rebuild.rebuild()
+    # already snapshots the current table into corridors_history right
+    # before calling this, so replacing here doesn't lose the ability to
+    # recover a prior state if something ever needs it.
+    with conn.transaction():
+        conn.execute("DELETE FROM corridors")
+        if to_insert:
+            with conn.cursor() as cur:
+                cur.executemany(
+                    """INSERT INTO corridors
+                           (origin_name, destination_name, origin_lat, origin_lon,
+                            destination_lat, destination_lon, pair_key, n, median_per_km,
+                            min_freight, max_freight, p10_freight, p90_freight,
+                            vehicle_freight_stats, vehicles)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                    to_insert,
+                )
     print(f"corridors: {len(to_insert)} geocoded and inserted, {n_failed} failed")
 
 
