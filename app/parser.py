@@ -17,6 +17,8 @@ import json
 import os
 import re
 
+from app.whatsapp_ingest import find_vehicle
+
 _MATERIALS_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "materials.json"
 )
@@ -45,12 +47,20 @@ _WEIGHT_NUM = r'-?[\d,]+(?:\.\d+)?'
 _WEIGHT_UNIT = r'(tonnes|tonne|tons|ton|mts|mt|tn|kgs|kg|t)\b'
 WEIGHT_RE = re.compile(r'(' + _WEIGHT_NUM + r')\s*' + _WEIGHT_UNIT, re.IGNORECASE)
 WEIGHT_ONLY_RE = re.compile(r'^' + _WEIGHT_NUM + r'\s*' + _WEIGHT_UNIT + r'\.?$', re.IGNORECASE)
-WEIGHT_SUFFIX_RE = re.compile(
-    r'^(.*?)[\s,]+' + _WEIGHT_NUM + r'\s*' + _WEIGHT_UNIT + r'\.?\s*$', re.IGNORECASE
-)
 BARE_NUMBER_RE = re.compile(r'^(' + _WEIGHT_NUM + r')$')
 ROUTE_TO_RE = re.compile(r'^(.*?)\s+to\s+(.*)$', re.IGNORECASE)
 ROUTE_DELIM_RE = re.compile(r'\s*(?:->|–|—|-|,|/)\s*')
+
+# Common real-world phrasing puts the weight mid-sentence, followed by a
+# vehicle-type or material mention ("Bangalore 20 ton container need 20ft"),
+# not at the literal end of the string -- truncating at the *first* weight
+# mention (rather than requiring it as the last token) handles that.
+LEADING_NOISE_RE = re.compile(
+    r'^(?:need(?:ed)?|require[d]?|want(?:ed)?|looking\s+for|available|urgent(?:ly)?|'
+    r'from|for|load|lorry|truck|tempo|trailer|pickup|vehicle|container)\b[\s,:\-]*',
+    re.IGNORECASE,
+)
+LEADING_VEHICLE_SIZE_RE = re.compile(r'^\d{1,2}\s*(?:ft|feet|wheel(?:er)?)\b[\s,:\-]*', re.IGNORECASE)
 
 
 def _clean(v):
@@ -62,10 +72,33 @@ def _is_weight_only(s):
 
 
 def _strip_weight_suffix(s):
-    m = WEIGHT_SUFFIX_RE.match(s.strip())
-    if m and m.group(1).strip():
-        return m.group(1).strip()
-    return s.strip()
+    """Truncates at the *first* weight mention anywhere in the string, not
+    just when it's the literal last token -- "Trivandrum 20 ton 22ft
+    offered 13000" and "Coimbatore, 12 tons, tempo" both need everything
+    from the weight onward dropped, not just a string that happens to end
+    right after the weight."""
+    s = s.strip()
+    m = WEIGHT_RE.search(s)
+    if m and s[:m.start()].strip():
+        return s[:m.start()].strip().rstrip(',').strip()
+    return s
+
+
+def _strip_leading_noise(s):
+    """Strips common request-phrase words ("need", "require", "from", ...)
+    and leading inline vehicle-size mentions ("20ft", "6 wheeler", ...) from
+    the front of a free-text origin candidate, repeatedly, so "Need lorry
+    from Salem" and "Require 20ft container Chennai" both reduce to just
+    the place name. A pragmatic fix for the patterns actually seen in real
+    posts, not an exhaustive NLP solution -- extend the pattern lists above
+    if a new common phrasing shows up."""
+    s = s.strip()
+    prev = None
+    while s != prev:
+        prev = s
+        s = LEADING_NOISE_RE.sub('', s).strip()
+        s = LEADING_VEHICLE_SIZE_RE.sub('', s).strip()
+    return s
 
 
 def _correct_material(raw):
@@ -133,7 +166,7 @@ def _fill_route_from_freetext(lines, used_lines):
     for line in candidates:
         m = ROUTE_TO_RE.match(line)
         if m:
-            origin = _clean(m.group(1))
+            origin = _clean(_strip_leading_noise(m.group(1)))
             destination = _clean(_strip_weight_suffix(m.group(2)))
             if origin and destination:
                 return origin, destination
@@ -142,11 +175,11 @@ def _fill_route_from_freetext(lines, used_lines):
         parts = [p for p in ROUTE_DELIM_RE.split(candidates[0]) if p.strip()]
         parts = [p.strip() for p in parts if not _is_weight_only(p)]
         if len(parts) == 2:
-            return _clean(parts[0]), _clean(_strip_weight_suffix(parts[1]))
+            return _clean(_strip_leading_noise(parts[0])), _clean(_strip_weight_suffix(parts[1]))
         return None, None
 
     origin, destination = candidates[0], candidates[1]
-    return _clean(origin), _clean(_strip_weight_suffix(destination))
+    return _clean(_strip_leading_noise(origin)), _clean(_strip_weight_suffix(destination))
 
 
 def parse_post(text):
@@ -176,11 +209,19 @@ def parse_post(text):
     if weight_tons is None:
         weight_tons = _extract_weight_tons(text)
 
+    # A poster who didn't use an explicit "Vehicle Type:" label often still
+    # names one inline ("...20ft container...", "...6 wheeler...") --
+    # app/whatsapp_ingest.py already has working regex for exactly this
+    # (used when ingesting historical WhatsApp exports); reusing it here
+    # means the live calculator picks up the same mentions instead of
+    # always falling back to a generic weight-based vehicle guess.
+    vehicle_type = fields.get("vehicle_type") or find_vehicle(text)
+
     return {
         "origin": origin,
         "destination": destination,
         "date": fields.get("date"),
-        "vehicle_type": fields.get("vehicle_type"),
+        "vehicle_type": vehicle_type,
         "material": _correct_material(fields.get("material")),
         "weight_tons": weight_tons,
         "loading_unloading": fields.get("loading_unloading"),

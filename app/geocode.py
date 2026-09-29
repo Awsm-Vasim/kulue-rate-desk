@@ -152,17 +152,52 @@ def _fuzzy_correct(name, cutoff=0.74):
     return matches[0] if matches else name
 
 
+# Priority tiers for picking among a place name's several Nominatim
+# candidates, most trustworthy first. A flat "prefer any place over any
+# boundary" rule isn't enough: Nominatim's importance ranking can put a
+# same-named tiny hamlet/village somewhere else in India (a totally
+# different, wrong point) above the real, significant town -- e.g.
+# "Ariyalur" also matches a hamlet inside Chennai, ranked higher by
+# Nominatim than the actual Ariyalur town 250km away. So: a city/town
+# match is trusted first (specific and rarely a false positive at this
+# size); an administrative boundary (district/county) is the next best
+# proxy when no city/town match exists (this is what correctly handles
+# "Sathyamangalam", which Nominatim only has as a county, not a city/
+# town -- its only "place"-class hits are wrong villages elsewhere);
+# a village/hamlet/suburb is trusted last, only if nothing better
+# exists, since those are the most prone to same-name false positives.
+_SEARCH_TIERS = (
+    {"city", "town"},
+    {"local_authority", "city_district"},  # e.g. a Kerala panchayat/municipality
+    {"state_district", "county"},
+    {"village", "suburb", "hamlet", "neighbourhood"},
+)
+
+
 def _search(q, viewbox=None):
-    params = {"q": q, "format": "json", "limit": 1}
+    """Geocodes via Nominatim, but doesn't blindly trust its single
+    top-ranked hit -- see _SEARCH_TIERS above for why. Fetches a few
+    candidates and picks the best-tier match; anything outside those tiers
+    (highway, shop, amenity, ...) is rejected outright, returning None so
+    the caller falls through to fuzzy-correction/typo-suggestion instead of
+    silently geocoding to something that was never really a place at all
+    (e.g. "Banglore" -> Nominatim's top hit is an expressway)."""
+    params = {"q": q, "format": "json", "limit": 5}
     if viewbox:
         params["viewbox"] = viewbox
         params["bounded"] = 1
     url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(params)
     try:
         data = _get_json(url)
-        return [float(data[0]["lat"]), float(data[0]["lon"])] if data else None
     except Exception:
         return None
+    if not data:
+        return None
+    for tier in _SEARCH_TIERS:
+        for d in data:  # already importance-ordered; first match in this tier wins
+            if d.get("addresstype") in tier:
+                return [float(d["lat"]), float(d["lon"])]
+    return None
 
 
 def _viewbox_around(lat, lon, deg=0.6):
