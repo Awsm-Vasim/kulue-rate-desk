@@ -62,6 +62,18 @@ LEADING_NOISE_RE = re.compile(
 )
 LEADING_VEHICLE_SIZE_RE = re.compile(r'^\d{1,2}\s*(?:ft|feet|wheel(?:er)?)\b[\s,:\-]*', re.IGNORECASE)
 
+# Mirror image of the leading-noise problem: a vehicle-type or generic
+# vehicle-word mention that lands *before* the weight on the destination
+# side ("Hosur 6 wheeler 10 ton", "Tirupur 14ft 7 ton") survives
+# _strip_weight_suffix's truncation untouched, since it's part of the text
+# kept (everything before the weight), not the part dropped.
+TRAILING_NOISE_RE = re.compile(
+    r'[\s,:\-]*\b(?:lorry|truck|tempo|trailer|pickup|vehicle|container|'
+    r'open\s*body|closed\s*body)\s*$',
+    re.IGNORECASE,
+)
+TRAILING_VEHICLE_SIZE_RE = re.compile(r'[\s,:\-]*\d{1,2}\s*(?:ft|feet|wheel(?:er)?)\s*$', re.IGNORECASE)
+
 
 def _clean(v):
     return v.strip().strip(',').strip()
@@ -98,6 +110,21 @@ def _strip_leading_noise(s):
         prev = s
         s = LEADING_NOISE_RE.sub('', s).strip()
         s = LEADING_VEHICLE_SIZE_RE.sub('', s).strip()
+    return s
+
+
+def _strip_destination_noise(s):
+    """Applies _strip_weight_suffix then mops up a trailing vehicle-type/
+    generic-vehicle-word mention left over on the destination side, e.g.
+    "Hosur 6 wheeler 10 ton" -> "Hosur 6 wheeler" (weight stripped) ->
+    "Hosur" (trailing noise stripped), repeatedly so multiple mentions
+    ("Trichy container 20ft 12 ton") fully reduce to the place name."""
+    s = _strip_weight_suffix(s)
+    prev = None
+    while s != prev:
+        prev = s
+        s = TRAILING_NOISE_RE.sub('', s).strip()
+        s = TRAILING_VEHICLE_SIZE_RE.sub('', s).strip()
     return s
 
 
@@ -167,7 +194,7 @@ def _fill_route_from_freetext(lines, used_lines):
         m = ROUTE_TO_RE.match(line)
         if m:
             origin = _clean(_strip_leading_noise(m.group(1)))
-            destination = _clean(_strip_weight_suffix(m.group(2)))
+            destination = _clean(_strip_destination_noise(m.group(2)))
             if origin and destination:
                 return origin, destination
 
@@ -175,11 +202,11 @@ def _fill_route_from_freetext(lines, used_lines):
         parts = [p for p in ROUTE_DELIM_RE.split(candidates[0]) if p.strip()]
         parts = [p.strip() for p in parts if not _is_weight_only(p)]
         if len(parts) == 2:
-            return _clean(_strip_leading_noise(parts[0])), _clean(_strip_weight_suffix(parts[1]))
+            return _clean(_strip_leading_noise(parts[0])), _clean(_strip_destination_noise(parts[1]))
         return None, None
 
     origin, destination = candidates[0], candidates[1]
-    return _clean(_strip_leading_noise(origin)), _clean(_strip_weight_suffix(destination))
+    return _clean(_strip_leading_noise(origin)), _clean(_strip_destination_noise(destination))
 
 
 def parse_post(text):
